@@ -140,7 +140,7 @@ export function ResultReveal({ scores, onComplete }: ResultRevealProps) {
   }, [stage, revealedTop3, top3, fireConfetti]);
 
   return (
-    <div className="fixed inset-0 bg-[#0A0E1A] flex items-center justify-center overflow-hidden z-50">
+    <div className={`fixed inset-0 bg-[#0A0E1A] flex justify-center z-50 ${stage === "final" ? "items-start overflow-y-auto" : "items-center overflow-hidden"}`}>
       {/* Stage 1: Blackout */}
       <AnimatePresence>
         {stage === "blackout" && (
@@ -231,7 +231,7 @@ export function ResultReveal({ scores, onComplete }: ResultRevealProps) {
                   </span>
                   <span className="text-4xl">{team.emoji}</span>
                   <span className="text-[#E8F4FD] font-bold flex-1" style={{ fontSize: "1.75rem" }}>
-                    {team.teamName}
+                    {team.teamName}{team.teamNickname && <span className="text-[#7B8BA3] text-lg ml-2">({team.teamNickname})</span>}
                   </span>
                   <span className="text-[#00FF88] font-mono font-bold glow-green" style={{ fontSize: "1.5rem" }}>
                     {team.finalScore.toFixed(1)}
@@ -283,7 +283,7 @@ export function ResultReveal({ scores, onComplete }: ResultRevealProps) {
                     <span style={{ fontSize: "3.5rem" }}>{team.emoji}</span>
                     <div className="flex-1">
                       <p className={`font-bold ${rankClass}`} style={{ fontSize: "2rem" }}>
-                        {team.teamName}
+                        {team.teamName}{team.teamNickname && <span className="text-[#7B8BA3] text-base ml-2">({team.teamNickname})</span>}
                       </p>
                       <p className="text-[#7B8BA3] font-mono text-lg">
                         Score: <span className={rankClass}>{team.finalScore.toFixed(1)}</span>
@@ -304,7 +304,7 @@ export function ResultReveal({ scores, onComplete }: ResultRevealProps) {
             key="final"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="w-full max-w-4xl px-6 flex flex-col gap-4"
+            className="w-full max-w-4xl px-6 py-10 flex flex-col gap-4"
           >
             <motion.h2
               className="text-[#00FF88] font-mono font-black glow-green text-center mb-2"
@@ -314,9 +314,9 @@ export function ResultReveal({ scores, onComplete }: ResultRevealProps) {
             >
               FINAL SCOREBOARD
             </motion.h2>
-            {top10.map((team, i) => {
+            {scores.map((team, i) => {
               const rankClass = getRankStyle(team.rank);
-              const maxScore = top10[0]?.finalScore || 100;
+              const maxScore = scores[0]?.finalScore || 100;
               const pct = (team.finalScore / maxScore) * 100;
               return (
                 <motion.div
@@ -332,7 +332,7 @@ export function ResultReveal({ scores, onComplete }: ResultRevealProps) {
                     </span>
                     <span style={{ fontSize: "1.6rem" }}>{team.emoji}</span>
                     <span className={`font-bold flex-1 ${rankClass}`} style={{ fontSize: "1.3rem" }}>
-                      {team.teamName}
+                      {team.teamName}{team.teamNickname && <span className="text-[#7B8BA3] text-sm ml-2">({team.teamNickname})</span>}
                     </span>
                     <span className={`font-mono font-bold ${rankClass}`} style={{ fontSize: "1.3rem" }}>
                       {team.finalScore.toFixed(1)}

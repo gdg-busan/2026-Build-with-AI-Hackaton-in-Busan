@@ -21,6 +21,7 @@ export function calculateScores(
     return {
       teamId: team.id,
       teamName: team.name,
+      teamNickname: team.nickname,
       emoji: team.emoji,
       judgeVoteCount: team.judgeVoteCount,
       participantVoteCount: team.participantVoteCount,

@@ -6,7 +6,7 @@ import { collection, doc, onSnapshot, getDocs } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
-import { calculateScores, getTop10 } from "@/lib/scoring";
+import { calculateScores } from "@/lib/scoring";
 import { EVENT_ID } from "@/lib/constants";
 import { ResultReveal } from "@/components/ResultReveal";
 import type { EventConfig, Team, TeamScore } from "@/lib/types";
@@ -155,7 +155,7 @@ export default function ResultsPage() {
   if (showReveal && !revealComplete) {
     return (
       <ResultReveal
-        scores={getTop10(scores)}
+        scores={scores}
         onComplete={() => {
           setShowReveal(false);
           setRevealComplete(true);
@@ -165,8 +165,8 @@ export default function ResultsPage() {
   }
 
   // Final scoreboard after reveal
-  const top10 = getTop10(scores);
-  const maxScore = top10[0]?.finalScore || 100;
+  const allScores = scores;
+  const maxScore = allScores[0]?.finalScore || 100;
 
   return (
     <div className="min-h-screen bg-[#0A0E1A] dot-grid py-10 px-4">
@@ -199,7 +199,7 @@ export default function ResultsPage() {
           transition={{ delay: 0.2 }}
           className="grid grid-cols-3 gap-4 mb-8"
         >
-          {[top10[1], top10[0], top10[2]].map((team, idx) => {
+          {[allScores[1], allScores[0], allScores[2]].map((team, idx) => {
             if (!team) return <div key={idx} />;
             const podiumOrder = [2, 1, 3];
             const actualRank = podiumOrder[idx];
@@ -214,7 +214,7 @@ export default function ResultsPage() {
                 className="flex flex-col items-center gap-2"
               >
                 <div className="text-4xl">{team.emoji}</div>
-                <p className={`font-bold text-center text-sm ${rankClass}`}>{team.teamName}</p>
+                <p className={`font-bold text-center text-sm ${rankClass}`}>{team.teamName}{team.teamNickname && <span className="text-[#7B8BA3] text-xs block">({team.teamNickname})</span>}</p>
                 <p className={`font-mono text-sm ${rankClass}`}>{team.finalScore.toFixed(1)}</p>
                 <div
                   className={`w-full rounded-t-lg flex items-center justify-center ${heights[idx]} bg-[#1A2235] border border-[rgba(77,175,255,0.15)]`}
@@ -230,7 +230,7 @@ export default function ResultsPage() {
 
         {/* Full leaderboard */}
         <div className="flex flex-col gap-3">
-          {top10.map((team, i) => {
+          {allScores.map((team, i) => {
             const pct = (team.finalScore / maxScore) * 100;
             const rankClass = getRankClass(team.rank);
             return (
@@ -247,7 +247,7 @@ export default function ResultsPage() {
                   </span>
                   <span style={{ fontSize: "1.6rem" }}>{team.emoji}</span>
                   <span className={`font-bold flex-1 ${rankClass}`} style={{ fontSize: "1.1rem" }}>
-                    {team.teamName}
+                    {team.teamName}{team.teamNickname && <span className="text-[#7B8BA3] text-sm ml-2">({team.teamNickname})</span>}
                   </span>
                   <span className={`font-mono font-bold ${rankClass}`} style={{ fontSize: "1.2rem" }}>
                     {team.finalScore.toFixed(1)}

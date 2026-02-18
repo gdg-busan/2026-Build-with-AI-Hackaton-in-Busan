@@ -109,7 +109,9 @@ export default function VotePage() {
     const unsub = onSnapshot(
       collection(getFirebaseDb(), "events", EVENT_ID, "votes"),
       (snap) => {
-        setVotedCount(snap.size);
+        setVotedCount(
+          snap.docs.filter((d) => d.data().role === "participant").length
+        );
         const myVote = snap.docs.find((d) => d.id === user.uid);
         if (myVote) {
           setHasVoted(true);
@@ -120,13 +122,15 @@ export default function VotePage() {
     return () => unsub();
   }, [user]);
 
-  // Total eligible voters (users collection)
+  // Total eligible voters (participants only)
   useEffect(() => {
     if (!user) return;
     const unsub = onSnapshot(
       collection(getFirebaseDb(), "events", EVENT_ID, "users"),
       (snap) => {
-        setTotalCount(snap.size);
+        setTotalCount(
+          snap.docs.filter((d) => d.data().role === "participant").length
+        );
       }
     );
     return () => unsub();

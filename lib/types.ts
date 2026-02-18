@@ -49,6 +49,7 @@ export interface Vote {
 export interface TeamScore {
   teamId: string;
   teamName: string;
+  teamNickname: string | null;
   emoji: string;
   judgeVoteCount: number;
   participantVoteCount: number;
