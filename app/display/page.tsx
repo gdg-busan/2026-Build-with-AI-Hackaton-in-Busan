@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, doc, onSnapshot, getDocs } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
+import { ExternalLink } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase";
 import { calculateScores, getTop10 } from "@/lib/scoring";
 import { EVENT_ID } from "@/lib/constants";
@@ -119,9 +120,14 @@ function StatusVoting({ teams, totalVoters }: { teams: Team[]; totalVoters: numb
               >
                 <div className="flex items-center gap-3">
                   <span style={{ fontSize: "2rem" }}>{team.emoji}</span>
-                  <span className="text-[#E8F4FD] font-bold flex-1" style={{ fontSize: "1.4rem" }}>
-                    {team.name}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[#E8F4FD] font-bold block truncate" style={{ fontSize: "1.4rem" }}>
+                      {team.name}
+                      {team.nickname && (
+                        <span className="text-[#7B8BA3] font-normal text-base">({team.nickname})</span>
+                      )}
+                    </span>
+                  </div>
                   <motion.span
                     className="text-[#00FF88] font-mono font-black glow-green"
                     style={{ fontSize: "1.8rem" }}
@@ -144,6 +150,17 @@ function StatusVoting({ teams, totalVoters }: { teams: Team[]; totalVoters: numb
                 <div className="flex gap-3 text-sm font-mono text-[#7B8BA3]">
                   <span>심사위원: <span className="text-[#FF6B35]">{team.judgeVoteCount}</span></span>
                   <span>참가자: <span className="text-[#4DAFFF]">{team.participantVoteCount}</span></span>
+                  {team.projectUrl && (
+                    <a
+                      href={team.projectUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-auto inline-flex items-center gap-1 text-[#4DAFFF] hover:text-[#4DAFFF]/80 transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      프로젝트
+                    </a>
+                  )}
                 </div>
               </motion.div>
             );
@@ -225,8 +242,10 @@ export default function DisplayPage() {
       const fetched: Team[] = snap.docs.map((d) => ({
         id: d.id,
         name: d.data().name,
+        nickname: d.data().nickname ?? null,
         description: d.data().description ?? "",
         emoji: d.data().emoji ?? "🚀",
+        projectUrl: d.data().projectUrl ?? null,
         memberUserIds: d.data().memberUserIds ?? [],
         judgeVoteCount: d.data().judgeVoteCount ?? 0,
         participantVoteCount: d.data().participantVoteCount ?? 0,

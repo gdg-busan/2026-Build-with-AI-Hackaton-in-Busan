@@ -15,8 +15,10 @@ export interface EventConfig {
 export interface Team {
   id: string;
   name: string;
+  nickname: string | null;
   description: string;
   emoji: string;
+  projectUrl: string | null;
   memberUserIds: string[];
   judgeVoteCount: number;
   participantVoteCount: number;
@@ -28,6 +30,13 @@ export interface User {
   role: UserRole;
   teamId: string | null;
   hasVoted: boolean;
+  bio: string | null;
+}
+
+export interface MemberProfile {
+  uniqueCode: string;
+  name: string;
+  bio: string | null;
 }
 
 export interface Vote {

@@ -42,8 +42,10 @@ export function parseTeam(id: string, data: DocumentData): Team {
   return {
     id,
     name: data.name || "",
+    nickname: data.nickname ?? null,
     description: data.description || "",
     emoji: data.emoji || "🚀",
+    projectUrl: data.projectUrl ?? null,
     memberUserIds: data.memberUserIds || [],
     judgeVoteCount: data.judgeVoteCount || 0,
     participantVoteCount: data.participantVoteCount || 0,

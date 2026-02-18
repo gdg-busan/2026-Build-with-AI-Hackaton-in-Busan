@@ -7,18 +7,25 @@ import {
   doc,
   onSnapshot,
   query,
+  getDocs,
+  where,
+  documentId,
 } from "firebase/firestore";
 import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { EVENT_ID } from "@/lib/constants";
-import type { Team, EventConfig } from "@/lib/types";
+import type { Team, EventConfig, MemberProfile } from "@/lib/types";
 import { TeamCard } from "@/components/TeamCard";
+import { TeamDetailSheet } from "@/components/TeamDetailSheet";
 import { VotingProgress } from "@/components/VotingProgress";
 import { VoteConfirmDialog } from "@/components/VoteConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { LogOut, CheckCircle2 } from "lucide-react";
+import { LogOut, CheckCircle2, Pencil, Trophy, UserPen } from "lucide-react";
+import Link from "next/link";
+import { TeamEditDialog } from "@/components/TeamEditDialog";
+import { MemberProfileDialog } from "@/components/MemberProfileDialog";
 
 export default function VotePage() {
   const router = useRouter();
@@ -33,6 +40,12 @@ export default function VotePage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [voteSuccess, setVoteSuccess] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [myDisplayName, setMyDisplayName] = useState<string>("");
+  const [myBio, setMyBio] = useState<string | null>(null);
+  const [inspectTeam, setInspectTeam] = useState<Team | null>(null);
+  const [inspectMembers, setInspectMembers] = useState<MemberProfile[]>([]);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -76,8 +89,10 @@ export default function VotePage() {
         const t: Team[] = snap.docs.map((d) => ({
           id: d.id,
           name: d.data().name,
+          nickname: d.data().nickname ?? null,
           description: d.data().description,
           emoji: d.data().emoji,
+          projectUrl: d.data().projectUrl ?? null,
           memberUserIds: d.data().memberUserIds ?? [],
           judgeVoteCount: d.data().judgeVoteCount ?? 0,
           participantVoteCount: d.data().participantVoteCount ?? 0,
@@ -116,6 +131,43 @@ export default function VotePage() {
     );
     return () => unsub();
   }, [user]);
+
+  // Fetch current user's bio from Firestore
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(
+      doc(getFirebaseDb(), "events", EVENT_ID, "users", user.uniqueCode),
+      (snap) => {
+        if (snap.exists()) {
+          setMyDisplayName(snap.data().name ?? "");
+          setMyBio(snap.data().bio ?? null);
+        }
+      }
+    );
+    return () => unsub();
+  }, [user]);
+
+  // Fetch member profiles when inspectTeam changes
+  useEffect(() => {
+    if (!inspectTeam || inspectTeam.memberUserIds.length === 0) {
+      setInspectMembers([]);
+      return;
+    }
+
+    const memberIds = inspectTeam.memberUserIds;
+    const usersCol = collection(getFirebaseDb(), "events", EVENT_ID, "users");
+
+    // Firestore 'in' query supports up to 30 items
+    const q = query(usersCol, where(documentId(), "in", memberIds.slice(0, 30)));
+    getDocs(q).then((snap) => {
+      const members: MemberProfile[] = snap.docs.map((d) => ({
+        uniqueCode: d.id,
+        name: d.data().name ?? d.id,
+        bio: d.data().bio ?? null,
+      }));
+      setInspectMembers(members);
+    });
+  }, [inspectTeam]);
 
   const handleToggle = useCallback(
     (teamId: string) => {
@@ -174,6 +226,12 @@ export default function VotePage() {
 
   const selectedTeamObjects = teams.filter((t) => selectedTeams.includes(t.id));
   const maxVotes = eventConfig?.maxVotesPerUser ?? 3;
+  const myTeam = teams.find((t) => t.id === user?.teamId);
+  const isVotingActive = eventConfig?.status === "voting";
+  const showTeams =
+    eventConfig?.status === "waiting" ||
+    eventConfig?.status === "voting" ||
+    eventConfig?.status === "closed";
 
   if (loading) {
     return (
@@ -194,7 +252,7 @@ export default function VotePage() {
             <span className="font-mono font-bold text-primary glow-green text-lg">
               $ vote
             </span>
-            <span className="font-mono text-foreground">{user.name}</span>
+            <span className="font-mono text-foreground">{myDisplayName || user.name}</span>
             <Badge
               className={
                 user.role === "judge"
@@ -205,24 +263,61 @@ export default function VotePage() {
               {user.role === "judge" ? "Judge" : "Participant"}
             </Badge>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={async () => {
-              await logout();
-              router.replace("/");
-            }}
-            className="font-mono gap-2"
-          >
-            <LogOut className="w-4 h-4" />
-            logout
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Profile edit button */}
+            {(user.role === "participant" || user.role === "judge") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setProfileDialogOpen(true)}
+                className="font-mono gap-2 text-primary hover:text-primary/80"
+              >
+                <UserPen className="w-4 h-4" />
+                프로필
+              </Button>
+            )}
+            {/* Team edit button - participants only */}
+            {user.role === "participant" && myTeam && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditDialogOpen(true)}
+                className="font-mono gap-2 text-[#4DAFFF] hover:text-[#4DAFFF]/80"
+              >
+                <Pencil className="w-4 h-4" />
+                팀 정보 수정
+              </Button>
+            )}
+            {/* Results navigation */}
+            <Link href="/results">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="font-mono gap-2 text-[#FF6B35] hover:text-[#FF6B35]/80"
+              >
+                <Trophy className="w-4 h-4" />
+                결과 보기
+              </Button>
+            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await logout();
+                router.replace("/");
+              }}
+              className="font-mono gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              logout
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* Event not in voting state */}
-        {eventConfig && eventConfig.status !== "voting" && !voteSuccess && (
+        {/* Status banner for non-voting states */}
+        {eventConfig && !isVotingActive && !voteSuccess && (
           <div className="rounded-xl border border-border bg-card p-8 text-center space-y-3">
             <p className="font-mono text-2xl text-primary glow-green">
               {eventConfig.status === "waiting"
@@ -250,13 +345,10 @@ export default function VotePage() {
           </div>
         )}
 
-        {/* Voting UI */}
-        {eventConfig?.status === "voting" && !voteSuccess && (
+        {/* Voting progress + selection counter - active voting only */}
+        {isVotingActive && !voteSuccess && (
           <>
-            {/* Voting progress */}
             <VotingProgress votedCount={votedCount} totalCount={totalCount} />
-
-            {/* Selection count */}
             <div className="flex items-center justify-between">
               <p className="font-mono text-sm text-muted-foreground">
                 투표할 팀을 선택하세요 (최대 {maxVotes}팀)
@@ -271,36 +363,50 @@ export default function VotePage() {
                 {selectedTeams.length}/{maxVotes} 팀 선택됨
               </span>
             </div>
+          </>
+        )}
 
-            {/* Team grid */}
+        {/* Team grid - always visible in waiting/voting/closed */}
+        {showTeams && teams.length > 0 && (
+          <>
+            {!isVotingActive && (
+              <p className="font-mono text-xs text-muted-foreground">
+                // 팀 목록 (읽기 전용)
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {teams.map((team) => (
                 <TeamCard
                   key={team.id}
                   team={team}
-                  isSelected={selectedTeams.includes(team.id)}
-                  isOwnTeam={user.teamId === team.id}
-                  onToggle={handleToggle}
+                  isSelected={isVotingActive && selectedTeams.includes(team.id)}
+                  isOwnTeam={isVotingActive && user.teamId === team.id}
+                  onToggle={isVotingActive ? handleToggle : () => {}}
+                  onInspect={setInspectTeam}
                   disabled={
-                    !selectedTeams.includes(team.id) &&
-                    selectedTeams.length >= maxVotes
+                    !isVotingActive ||
+                    voteSuccess ||
+                    (!selectedTeams.includes(team.id) &&
+                      selectedTeams.length >= maxVotes)
                   }
                 />
               ))}
             </div>
-
-            {/* Submit button */}
-            <div className="flex justify-center pt-4">
-              <Button
-                size="lg"
-                disabled={selectedTeams.length === 0}
-                onClick={() => setConfirmOpen(true)}
-                className="font-mono px-10"
-              >
-                $ submit_vote ({selectedTeams.length}팀)
-              </Button>
-            </div>
           </>
+        )}
+
+        {/* Submit button - voting state only */}
+        {isVotingActive && !voteSuccess && (
+          <div className="flex justify-center pt-4">
+            <Button
+              size="lg"
+              disabled={selectedTeams.length === 0}
+              onClick={() => setConfirmOpen(true)}
+              className="font-mono px-10"
+            >
+              $ submit_vote ({selectedTeams.length}팀)
+            </Button>
+          </div>
         )}
       </main>
 
@@ -312,6 +418,46 @@ export default function VotePage() {
         onConfirm={handleSubmit}
         loading={submitting}
       />
+
+      {/* Team detail sheet */}
+      <TeamDetailSheet
+        team={inspectTeam}
+        open={inspectTeam !== null}
+        onOpenChange={(open) => {
+          if (!open) setInspectTeam(null);
+        }}
+        isSelected={
+          isVotingActive && inspectTeam
+            ? selectedTeams.includes(inspectTeam.id)
+            : false
+        }
+        isOwnTeam={
+          isVotingActive && inspectTeam
+            ? user.teamId === inspectTeam.id
+            : false
+        }
+        canVote={isVotingActive && !voteSuccess}
+        maxReached={selectedTeams.length >= maxVotes}
+        onToggleVote={handleToggle}
+        members={inspectMembers}
+      />
+
+      {/* Member profile dialog */}
+      <MemberProfileDialog
+        open={profileDialogOpen}
+        onOpenChange={setProfileDialogOpen}
+        currentName={myDisplayName || user.name}
+        currentBio={myBio}
+      />
+
+      {/* Team edit dialog */}
+      {myTeam && (
+        <TeamEditDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          team={myTeam}
+        />
+      )}
     </div>
   );
 }

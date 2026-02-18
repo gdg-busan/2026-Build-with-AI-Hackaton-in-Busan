@@ -67,8 +67,10 @@ export async function POST(request: NextRequest) {
         const teamRef = teamsCol().doc();
         await teamRef.set({
           name,
+          nickname: null,
           description,
           emoji,
+          projectUrl: null,
           memberUserIds: [],
           judgeVoteCount: 0,
           participantVoteCount: 0,
@@ -321,8 +323,10 @@ export async function POST(request: NextRequest) {
           const memberCodes = teamResults[i].members.map((m) => m.code);
           batch.set(teamRefs[i].ref, {
             name: teamResults[i].name,
+            nickname: null,
             description: "",
             emoji: teamResults[i].emoji,
+            projectUrl: null,
             memberUserIds: memberCodes,
             judgeVoteCount: 0,
             participantVoteCount: 0,

@@ -198,6 +198,11 @@
   text-shadow: 0 0 15px rgba(205, 127, 50, 0.5);
 }
 
+/* Drawer glow */
+.drawer-glow {
+  box-shadow: -4px 0 40px rgba(0, 255, 136, 0.12), -1px 0 0 rgba(0, 255, 136, 0.3);
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

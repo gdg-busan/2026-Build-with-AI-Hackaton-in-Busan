@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Ban } from "lucide-react";
+import { Check, Ban, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Team } from "@/lib/types";
 
@@ -10,6 +10,7 @@ interface TeamCardProps {
   isSelected: boolean;
   isOwnTeam: boolean;
   onToggle: (teamId: string) => void;
+  onInspect?: (team: Team) => void;
   disabled?: boolean;
 }
 
@@ -18,6 +19,7 @@ export function TeamCard({
   isSelected,
   isOwnTeam,
   onToggle,
+  onInspect,
   disabled = false,
 }: TeamCardProps) {
   const isDisabled = disabled || isOwnTeam;
@@ -57,10 +59,24 @@ export function TeamCard({
         </div>
       )}
 
+      {/* Inspect button */}
+      {onInspect && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onInspect(team);
+          }}
+          className="absolute top-2.5 left-2.5 w-7 h-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-[#4DAFFF] hover:bg-[#4DAFFF]/10 transition-colors z-10"
+          aria-label="팀 상세 보기"
+        >
+          <Info className="w-4 h-4" />
+        </button>
+      )}
+
       {/* Team emoji */}
       <div className="text-4xl mb-3">{team.emoji}</div>
 
-      {/* Team name */}
+      {/* Team name with optional nickname */}
       <h3
         className={cn(
           "font-mono font-bold text-lg mb-1",
@@ -68,6 +84,11 @@ export function TeamCard({
         )}
       >
         {team.name}
+        {team.nickname && (
+          <span className="text-muted-foreground font-normal text-sm ml-1">
+            ({team.nickname})
+          </span>
+        )}
       </h3>
 
       {/* Team description */}
@@ -75,9 +96,21 @@ export function TeamCard({
         {team.description}
       </p>
 
+      {/* Detail hint */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onInspect?.(team);
+        }}
+        className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-[#4DAFFF] hover:text-[#4DAFFF]/80 transition-colors"
+      >
+        <Info className="w-3 h-3" />
+        상세 보기
+      </button>
+
       {/* Own team label */}
       {isOwnTeam && (
-        <div className="mt-3 text-xs font-mono text-destructive">
+        <div className="mt-2 text-xs font-mono text-destructive">
           // 자기 팀에는 투표할 수 없습니다
         </div>
       )}

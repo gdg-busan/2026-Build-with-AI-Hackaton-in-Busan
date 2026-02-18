@@ -74,8 +74,10 @@ export default function ResultsPage() {
       const teams: Team[] = snap.docs.map((d) => ({
         id: d.id,
         name: d.data().name,
+        nickname: d.data().nickname ?? null,
         description: d.data().description ?? "",
         emoji: d.data().emoji ?? "🚀",
+        projectUrl: d.data().projectUrl ?? null,
         memberUserIds: d.data().memberUserIds ?? [],
         judgeVoteCount: d.data().judgeVoteCount ?? 0,
         participantVoteCount: d.data().participantVoteCount ?? 0,
@@ -109,17 +111,17 @@ export default function ResultsPage() {
 
   if (!user) return null;
 
-  // Waiting for reveal
+  // Not yet revealed
   if (!eventConfig || eventConfig.status !== "revealed") {
     return (
       <div className="min-h-screen bg-[#0A0E1A] dot-grid flex flex-col items-center justify-center gap-8">
         <motion.div
-          className="text-[#00FF88] font-mono font-black glow-green text-center"
-          style={{ fontSize: "3rem" }}
+          className="text-[#4DAFFF] font-mono font-black glow-blue text-center"
+          style={{ fontSize: "2.5rem" }}
           animate={{ opacity: [0.6, 1, 0.6] }}
-          transition={{ repeat: Infinity, duration: 2 }}
+          transition={{ repeat: Infinity, duration: 2.5 }}
         >
-          결과 발표 대기 중
+          아직 결과가 발표되지 않았습니다
         </motion.div>
         <motion.div
           className="flex gap-2"
@@ -129,7 +131,7 @@ export default function ResultsPage() {
           {[0, 1, 2].map((i) => (
             <motion.span
               key={i}
-              className="w-3 h-3 rounded-full bg-[#00FF88]"
+              className="w-3 h-3 rounded-full bg-[#4DAFFF]"
               animate={{ scale: [1, 1.5, 1] }}
               transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.2 }}
             />
@@ -137,13 +139,13 @@ export default function ResultsPage() {
         </motion.div>
         <p className="text-[#7B8BA3] font-mono text-lg">
           현재 상태:{" "}
-          <span className="text-[#4DAFFF]">{eventConfig?.status ?? "..."}</span>
+          <span className="text-[#00FF88]">{eventConfig?.status ?? "..."}</span>
         </p>
         <button
-          onClick={() => router.push("/")}
-          className="mt-4 px-6 py-2 border border-[rgba(77,175,255,0.3)] text-[#4DAFFF] font-mono rounded-lg hover:border-[#4DAFFF] transition-colors"
+          onClick={() => router.push("/vote")}
+          className="mt-4 px-6 py-2 border border-[rgba(0,255,136,0.4)] text-[#00FF88] font-mono rounded-lg hover:border-[#00FF88] hover:bg-[rgba(0,255,136,0.08)] transition-colors"
         >
-          홈으로 돌아가기
+          투표 페이지로 돌아가기
         </button>
       </div>
     );
@@ -173,8 +175,14 @@ export default function ResultsPage() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-10"
+          className="text-center mb-10 relative"
         >
+          <button
+            onClick={() => router.push("/vote")}
+            className="absolute left-0 top-1/2 -translate-y-1/2 px-4 py-2 border border-[rgba(77,175,255,0.3)] text-[#4DAFFF] font-mono text-sm rounded-lg hover:border-[#4DAFFF] hover:bg-[rgba(77,175,255,0.08)] transition-colors"
+          >
+            ← 투표 페이지
+          </button>
           <h1
             className="font-mono font-black glow-green text-[#00FF88] mb-2"
             style={{ fontSize: "2.5rem" }}
