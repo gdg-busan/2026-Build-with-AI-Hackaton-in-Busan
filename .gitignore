@@ -45,6 +45,7 @@ next-env.d.ts
 .omc/
 
 # serena cache
+.serena/
 .serena/cache/
 .serena/memories/
 
