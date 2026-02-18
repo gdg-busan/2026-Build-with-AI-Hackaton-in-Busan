@@ -1,0 +1,1007 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import {
+  collection,
+  doc,
+  onSnapshot,
+} from "firebase/firestore";
+import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { calculateScores, getTop10 } from "@/lib/scoring";
+import { TEAM_EMOJIS, EVENT_ID } from "@/lib/constants";
+import type { Team, User, EventConfig, EventStatus, UserRole } from "@/lib/types";
+import { toast } from "sonner";
+import BatchSetupWizard from "@/components/BatchSetupWizard";
+
+type TabType = "setup" | "event" | "teams" | "users" | "monitor";
+
+const STATUS_COLORS: Record<EventStatus, string> = {
+  waiting: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+  voting: "bg-green-500/20 text-[#00FF88] border-[#00FF88]/30",
+  closed: "bg-red-500/20 text-red-400 border-red-500/30",
+  revealed: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+};
+
+const STATUS_LABELS: Record<EventStatus, string> = {
+  waiting: "대기중",
+  voting: "투표중",
+  closed: "마감",
+  revealed: "공개됨",
+};
+
+const STATUS_TRANSITIONS: Record<EventStatus, EventStatus | null> = {
+  waiting: "voting",
+  voting: "closed",
+  closed: "revealed",
+  revealed: null,
+};
+
+const STATUS_TRANSITION_LABELS: Record<EventStatus, string> = {
+  waiting: "투표 시작",
+  voting: "투표 마감",
+  closed: "결과 공개",
+  revealed: "",
+};
+
+export default function AdminPage() {
+  const { user, loading, logout } = useAuth();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<TabType>("setup");
+  const [eventConfig, setEventConfig] = useState<EventConfig | null>(null);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+
+  // Event config edit state
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [configForm, setConfigForm] = useState({
+    judgeWeight: 0.8,
+    participantWeight: 0.2,
+    maxVotesPerUser: 3,
+  });
+
+  // Team form state
+  const [showAddTeam, setShowAddTeam] = useState(false);
+  const [teamForm, setTeamForm] = useState({ name: "", description: "", emoji: "🚀" });
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+
+  // Code generation state
+  const [codeCount, setCodeCount] = useState(5);
+  const [codeRole, setCodeRole] = useState<UserRole>("participant");
+  const [generatingCodes, setGeneratingCodes] = useState(false);
+
+  // Loading states
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!loading && (!user || user.role !== "admin")) {
+      router.replace("/");
+    }
+  }, [user, loading, router]);
+
+  useEffect(() => {
+    if (!user || user.role !== "admin") return;
+
+    const eventDocRef = doc(getFirebaseDb(), "events", EVENT_ID);
+
+    // Subscribe to event config
+    const eventUnsub = onSnapshot(eventDocRef, (snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setEventConfig({
+          id: snap.id,
+          status: d.status,
+          judgeWeight: d.judgeWeight,
+          participantWeight: d.participantWeight,
+          maxVotesPerUser: d.maxVotesPerUser,
+          votingDeadline: d.votingDeadline?.toDate?.() || null,
+          title: d.title || "",
+          createdAt: d.createdAt?.toDate?.() || new Date(),
+        });
+        setConfigForm({
+          judgeWeight: d.judgeWeight,
+          participantWeight: d.participantWeight,
+          maxVotesPerUser: d.maxVotesPerUser,
+        });
+      }
+    });
+
+    // Subscribe to teams (subcollection under event)
+    const teamsUnsub = onSnapshot(collection(eventDocRef, "teams"), (snap) => {
+      setTeams(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() } as Team))
+      );
+    });
+
+    // Subscribe to users (subcollection under event)
+    const usersUnsub = onSnapshot(collection(eventDocRef, "users"), (snap) => {
+      setUsers(
+        snap.docs.map((d) => ({ ...d.data() } as User))
+      );
+    });
+
+    return () => {
+      eventUnsub();
+      teamsUnsub();
+      usersUnsub();
+    };
+  }, [user]);
+
+  const getIdToken = useCallback(async () => {
+    const currentUser = getFirebaseAuth().currentUser;
+    if (!currentUser) throw new Error("Not authenticated");
+    return await currentUser.getIdToken();
+  }, []);
+
+  const callAdminApi = useCallback(
+    async (action: string, data: Record<string, unknown>) => {
+      const token = await getIdToken();
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action, data }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "API error");
+      }
+      return res.json();
+    },
+    [getIdToken]
+  );
+
+  const handleStatusChange = async (newStatus: EventStatus) => {
+    if (!eventConfig || eventConfig.status === newStatus) return;
+
+    if (!confirm(`상태를 "${STATUS_LABELS[newStatus]}"(으)로 변경하시겠습니까?`)) return;
+
+    setSubmitting(true);
+    try {
+      await callAdminApi("updateEventStatus", { status: newStatus });
+      toast.success(`상태가 "${STATUS_LABELS[newStatus]}"(으)로 변경되었습니다.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    setSubmitting(true);
+    try {
+      await callAdminApi("updateEventConfig", configForm);
+      setEditingConfig(false);
+      toast.success("설정이 저장되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAddTeam = async () => {
+    if (!teamForm.name.trim()) {
+      toast.error("팀 이름을 입력하세요.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await callAdminApi("addTeam", teamForm);
+      setTeamForm({ name: "", description: "", emoji: "🚀" });
+      setShowAddTeam(false);
+      toast.success("팀이 추가되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateTeam = async () => {
+    if (!editingTeam) return;
+    setSubmitting(true);
+    try {
+      await callAdminApi("updateTeam", {
+        teamId: editingTeam.id,
+        name: editingTeam.name,
+        description: editingTeam.description,
+        emoji: editingTeam.emoji,
+      });
+      setEditingTeam(null);
+      toast.success("팀이 수정되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteTeam = async (teamId: string, teamName: string) => {
+    if (!confirm(`팀 "${teamName}"을 삭제하시겠습니까?`)) return;
+    setSubmitting(true);
+    try {
+      await callAdminApi("deleteTeam", { teamId });
+      toast.success("팀이 삭제되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGenerateCodes = async () => {
+    if (codeCount < 1 || codeCount > 100) {
+      toast.error("1~100 사이의 숫자를 입력하세요.");
+      return;
+    }
+    setGeneratingCodes(true);
+    try {
+      const result = await callAdminApi("generateCodes", {
+        count: codeCount,
+        role: codeRole,
+      });
+      toast.success(`${result.codes.length}개의 코드가 생성되었습니다.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGeneratingCodes(false);
+    }
+  };
+
+  const handleAssignTeam = async (userCode: string, teamId: string | null) => {
+    try {
+      await callAdminApi("assignTeam", { userCode, teamId });
+      toast.success("팀이 배정되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const handleResetVotes = async () => {
+    if (!confirm("모든 투표를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
+    if (!confirm("정말로 초기화하시겠습니까? 최종 확인입니다.")) return;
+    setSubmitting(true);
+    try {
+      await callAdminApi("resetVotes", {});
+      toast.success("모든 투표가 초기화되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetAll = async () => {
+    if (!confirm("모든 팀, 참가자, 투표를 초기화하시겠습니까? 관리자 계정만 유지됩니다.")) return;
+    if (!confirm("정말로 전체 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다!")) return;
+    setSubmitting(true);
+    try {
+      await callAdminApi("resetAll", {});
+      toast.success("전체 초기화가 완료되었습니다. 관리자 계정만 유지됩니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteUser = async (userCode: string, userName: string) => {
+    if (!confirm(`"${userName}" (${userCode})를 삭제하시겠습니까?`)) return;
+    try {
+      await callAdminApi("deleteUser", { userCode });
+      toast.success(`"${userName}"이(가) 삭제되었습니다.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("클립보드에 복사되었습니다.");
+  };
+
+  const copyAllCodes = (role?: UserRole) => {
+    const filtered = role ? users.filter((u) => u.role === role) : users;
+    const text = filtered.map((u) => `${u.uniqueCode}\t${u.name}\t${u.role}`).join("\n");
+    navigator.clipboard.writeText(text);
+    toast.success(`${filtered.length}개의 코드가 복사되었습니다.`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0A0E1A] flex items-center justify-center">
+        <div className="text-[#00FF88] font-mono animate-pulse">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user || user.role !== "admin") return null;
+
+  const votedCount = users.filter((u) => u.hasVoted).length;
+  const totalCount = users.filter((u) => u.role !== "admin").length;
+  const scores = calculateScores(teams, eventConfig?.judgeWeight, eventConfig?.participantWeight);
+  const top10 = getTop10(scores);
+  const maxVotes = Math.max(...teams.map((t) => t.judgeVoteCount + t.participantVoteCount), 1);
+
+  const tabs: { key: TabType; label: string }[] = [
+    { key: "setup", label: "일괄 설정" },
+    { key: "event", label: "이벤트 제어" },
+    { key: "teams", label: "팀 관리" },
+    { key: "users", label: "사용자 & 코드" },
+    { key: "monitor", label: "실시간 모니터" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#0A0E1A] text-white">
+      {/* Header */}
+      <header className="border-b border-[#00FF88]/20 bg-[#1A2235]/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-[#00FF88] font-mono text-lg font-bold">&gt;_ Admin Dashboard</span>
+            {eventConfig && (
+              <span className={`text-xs px-2 py-0.5 rounded border font-mono ${STATUS_COLORS[eventConfig.status]}`}>
+                {STATUS_LABELS[eventConfig.status]}
+              </span>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await logout();
+              router.replace("/");
+            }}
+          >
+            로그아웃
+          </Button>
+        </div>
+      </header>
+
+      {/* Tabs */}
+      <div className="max-w-7xl mx-auto px-4 pt-6">
+        <div className="flex gap-1 border-b border-[#1A2235] mb-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 font-mono text-sm transition-all ${
+                activeTab === tab.key
+                  ? "text-[#00FF88] border-b-2 border-[#00FF88]"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* BATCH SETUP TAB */}
+        {activeTab === "setup" && (
+          <BatchSetupWizard
+            onComplete={() => setActiveTab("teams")}
+            callAdminApi={callAdminApi}
+          />
+        )}
+
+        {/* EVENT CONTROL TAB */}
+        {activeTab === "event" && (
+          <div className="space-y-6">
+            {/* Status Card */}
+            <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
+              <h2 className="text-[#00FF88] font-mono font-semibold mb-4">이벤트 상태</h2>
+              {eventConfig ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <span className="text-gray-400 font-mono text-sm">현재 상태:</span>
+                    <span className={`text-sm px-3 py-1 rounded-full border font-mono ${STATUS_COLORS[eventConfig.status]}`}>
+                      {STATUS_LABELS[eventConfig.status]}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(["waiting", "voting", "closed", "revealed"] as EventStatus[]).map((status) => (
+                      <Button
+                        key={status}
+                        onClick={() => handleStatusChange(status)}
+                        disabled={submitting || eventConfig.status === status}
+                        variant={eventConfig.status === status ? "default" : "outline"}
+                        className={`font-mono text-xs ${
+                          eventConfig.status === status
+                            ? "bg-[#00FF88] text-[#0A0E1A] hover:bg-[#00FF88]/90"
+                            : "border-gray-600 text-gray-400 hover:border-[#00FF88]/50 hover:text-[#00FF88]"
+                        }`}
+                      >
+                        {STATUS_LABELS[status]}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="text-gray-500 font-mono text-xs mt-2">
+                    원하는 상태를 클릭하여 자유롭게 변경할 수 있습니다.
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-gray-500 font-mono text-sm">이벤트가 아직 생성되지 않았습니다.</div>
+                  <Button
+                    onClick={async () => {
+                      setSubmitting(true);
+                      try {
+                        await callAdminApi("initEvent", {});
+                        toast.success("이벤트가 초기화되었습니다.");
+                      } catch (e) {
+                        toast.error((e as Error).message);
+                      } finally {
+                        setSubmitting(false);
+                      }
+                    }}
+                    disabled={submitting}
+                    className="font-mono"
+                  >
+                    이벤트 초기화
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Config Card */}
+            <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-[#00FF88] font-mono font-semibold">가중치 설정</h2>
+                {!editingConfig ? (
+                  <Button variant="outline" size="sm" onClick={() => setEditingConfig(true)}>
+                    수정
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleSaveConfig} disabled={submitting}>저장</Button>
+                    <Button variant="outline" size="sm" onClick={() => setEditingConfig(false)}>취소</Button>
+                  </div>
+                )}
+              </div>
+              {eventConfig && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">심사위원 가중치</label>
+                    {editingConfig ? (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="1"
+                        value={configForm.judgeWeight}
+                        onChange={(e) =>
+                          setConfigForm((p) => ({ ...p, judgeWeight: parseFloat(e.target.value) }))
+                        }
+                        className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                      />
+                    ) : (
+                      <div className="text-white font-mono text-lg">{eventConfig.judgeWeight}</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">참가자 가중치</label>
+                    {editingConfig ? (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="1"
+                        value={configForm.participantWeight}
+                        onChange={(e) =>
+                          setConfigForm((p) => ({ ...p, participantWeight: parseFloat(e.target.value) }))
+                        }
+                        className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                      />
+                    ) : (
+                      <div className="text-white font-mono text-lg">{eventConfig.participantWeight}</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">최대 투표 수</label>
+                    {editingConfig ? (
+                      <Input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={configForm.maxVotesPerUser}
+                        onChange={(e) =>
+                          setConfigForm((p) => ({ ...p, maxVotesPerUser: parseInt(e.target.value) }))
+                        }
+                        className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                      />
+                    ) : (
+                      <div className="text-white font-mono text-lg">{eventConfig.maxVotesPerUser}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Danger Zone */}
+            <div className="bg-red-950/20 rounded-xl p-6 border border-red-500/20">
+              <h2 className="text-red-400 font-mono font-semibold mb-4">위험 구역</h2>
+              <div className="flex gap-3">
+                <Button
+                  variant="destructive"
+                  onClick={handleResetVotes}
+                  disabled={submitting}
+                  className="font-mono"
+                >
+                  모든 투표 초기화
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleResetAll}
+                  disabled={submitting}
+                  className="font-mono"
+                >
+                  전체 초기화 (팀+참가자+투표)
+                </Button>
+              </div>
+              <p className="text-red-400/60 font-mono text-xs mt-3">
+                전체 초기화: 모든 팀, 참가자, 심사위원, 투표를 삭제합니다. 관리자 계정만 유지됩니다.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* TEAMS TAB */}
+        {activeTab === "teams" && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[#00FF88] font-mono font-semibold">팀 목록 ({teams.length})</h2>
+              <Button onClick={() => setShowAddTeam(true)} disabled={showAddTeam}>
+                + 팀 추가
+              </Button>
+            </div>
+
+            {/* Add Team Form */}
+            {showAddTeam && (
+              <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/30">
+                <h3 className="text-[#00FF88] font-mono mb-4">새 팀 추가</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">팀 이름</label>
+                    <Input
+                      value={teamForm.name}
+                      onChange={(e) => setTeamForm((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="팀 이름"
+                      className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">설명</label>
+                    <Input
+                      value={teamForm.description}
+                      onChange={(e) => setTeamForm((p) => ({ ...p, description: e.target.value }))}
+                      placeholder="팀 설명"
+                      className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">이모지</label>
+                    <div className="flex flex-wrap gap-2">
+                      {TEAM_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => setTeamForm((p) => ({ ...p, emoji }))}
+                          className={`w-9 h-9 text-lg rounded-lg border transition-all ${
+                            teamForm.emoji === emoji
+                              ? "border-[#00FF88] bg-[#00FF88]/10"
+                              : "border-[#1A2235] hover:border-gray-500"
+                          }`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button onClick={handleAddTeam} disabled={submitting}>추가</Button>
+                    <Button variant="outline" onClick={() => setShowAddTeam(false)}>취소</Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Teams List */}
+            <div className="space-y-3">
+              {teams.map((team) => (
+                <div
+                  key={team.id}
+                  className="bg-[#1A2235] rounded-xl p-4 border border-[#00FF88]/10"
+                >
+                  {editingTeam?.id === team.id ? (
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <Input
+                          value={editingTeam.name}
+                          onChange={(e) =>
+                            setEditingTeam((p) => p ? { ...p, name: e.target.value } : null)
+                          }
+                          className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                        />
+                        <Input
+                          value={editingTeam.description}
+                          onChange={(e) =>
+                            setEditingTeam((p) => p ? { ...p, description: e.target.value } : null)
+                          }
+                          className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {TEAM_EMOJIS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => setEditingTeam((p) => p ? { ...p, emoji } : null)}
+                            className={`w-8 h-8 text-base rounded-lg border transition-all ${
+                              editingTeam.emoji === emoji
+                                ? "border-[#00FF88] bg-[#00FF88]/10"
+                                : "border-[#1A2235] hover:border-gray-500"
+                            }`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleUpdateTeam} disabled={submitting}>저장</Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingTeam(null)}>취소</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{team.emoji}</span>
+                        <div>
+                          <div className="text-white font-mono font-semibold">{team.name}</div>
+                          <div className="text-gray-400 text-sm">{team.description}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right text-xs font-mono text-gray-400">
+                          <div>심사: {team.judgeVoteCount}표</div>
+                          <div>참가자: {team.participantVoteCount}표</div>
+                          <div>멤버: {team.memberUserIds.length}명</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingTeam(team)}
+                          >
+                            수정
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeleteTeam(team.id, team.name)}
+                            disabled={submitting}
+                          >
+                            삭제
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {teams.length === 0 && (
+                <div className="text-gray-500 font-mono text-sm text-center py-8">
+                  등록된 팀이 없습니다.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* USERS & CODES TAB */}
+        {activeTab === "users" && (
+          <div className="space-y-6">
+            {/* Generate Codes */}
+            <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
+              <h2 className="text-[#00FF88] font-mono font-semibold mb-4">코드 생성</h2>
+              <div className="flex items-end gap-4">
+                <div>
+                  <label className="text-gray-400 font-mono text-xs block mb-1">개수</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={codeCount}
+                    onChange={(e) => setCodeCount(parseInt(e.target.value) || 1)}
+                    className="font-mono bg-[#0A0E1A] border-[#00FF88]/20 w-24"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 font-mono text-xs block mb-1">역할</label>
+                  <select
+                    value={codeRole}
+                    onChange={(e) => setCodeRole(e.target.value as UserRole)}
+                    className="h-10 px-3 rounded-lg bg-[#0A0E1A] border border-[#00FF88]/20 text-white font-mono text-sm"
+                  >
+                    <option value="participant">참가자</option>
+                    <option value="judge">심사위원</option>
+                    <option value="admin">관리자</option>
+                  </select>
+                </div>
+                <Button onClick={handleGenerateCodes} disabled={generatingCodes}>
+                  {generatingCodes ? "생성 중..." : "코드 생성"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Users Table */}
+            <div className="bg-[#1A2235] rounded-xl border border-[#00FF88]/10 overflow-hidden">
+              <div className="p-4 flex items-center justify-between border-b border-[#00FF88]/10">
+                <h2 className="text-[#00FF88] font-mono font-semibold">
+                  사용자 목록 ({users.length})
+                </h2>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => copyAllCodes()}>
+                    전체 복사
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => copyAllCodes("participant")}>
+                    참가자 복사
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => copyAllCodes("judge")}>
+                    심사위원 복사
+                  </Button>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm font-mono">
+                  <thead>
+                    <tr className="border-b border-[#00FF88]/10 text-gray-400 text-xs">
+                      <th className="text-left p-3">코드</th>
+                      <th className="text-left p-3">이름</th>
+                      <th className="text-left p-3">역할</th>
+                      <th className="text-left p-3">팀</th>
+                      <th className="text-left p-3">투표</th>
+                      <th className="text-left p-3">액션</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => {
+                      const userTeam = teams.find((t) => t.id === u.teamId);
+                      return (
+                        <tr
+                          key={u.uniqueCode}
+                          className="border-b border-[#1A2235] hover:bg-[#0A0E1A]/50 transition-colors"
+                        >
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[#00FF88]">{u.uniqueCode}</span>
+                              <button
+                                onClick={() => copyToClipboard(u.uniqueCode)}
+                                className="text-gray-500 hover:text-white text-xs"
+                              >
+                                복사
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-3 text-gray-300">{u.name}</td>
+                          <td className="p-3">
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full ${
+                                u.role === "admin"
+                                  ? "bg-purple-500/20 text-purple-400"
+                                  : u.role === "judge"
+                                  ? "bg-[#FF6B35]/20 text-[#FF6B35]"
+                                  : "bg-[#00FF88]/20 text-[#00FF88]"
+                              }`}
+                            >
+                              {u.role === "admin" ? "관리자" : u.role === "judge" ? "심사위원" : "참가자"}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <select
+                              value={u.teamId || ""}
+                              onChange={(e) =>
+                                handleAssignTeam(u.uniqueCode, e.target.value || null)
+                              }
+                              className="bg-[#0A0E1A] border border-[#00FF88]/20 rounded px-2 py-1 text-xs text-white"
+                            >
+                              <option value="">미배정</option>
+                              {teams.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.emoji} {t.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-3">
+                            <span
+                              className={`text-xs ${
+                                u.hasVoted ? "text-[#00FF88]" : "text-gray-500"
+                              }`}
+                            >
+                              {u.hasVoted ? "완료" : "미투표"}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => copyToClipboard(u.uniqueCode)}
+                                className="text-xs text-gray-400 hover:text-[#00FF88] transition-colors"
+                              >
+                                복사
+                              </button>
+                              {u.role !== "admin" && (
+                                <button
+                                  onClick={() => handleDeleteUser(u.uniqueCode, u.name)}
+                                  className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+                                >
+                                  삭제
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {users.length === 0 && (
+                  <div className="text-gray-500 font-mono text-sm text-center py-8">
+                    생성된 사용자가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* LIVE MONITOR TAB */}
+        {activeTab === "monitor" && (
+          <div className="space-y-6">
+            {/* Voting Progress */}
+            <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
+              <h2 className="text-[#00FF88] font-mono font-semibold mb-4">투표 진행률</h2>
+              <div className="flex items-center gap-4 mb-3">
+                <span className="text-white font-mono text-2xl font-bold">
+                  {votedCount} / {totalCount}
+                </span>
+                <span className="text-gray-400 font-mono text-sm">명 투표 완료</span>
+                <span className="text-[#00FF88] font-mono text-lg font-bold">
+                  {totalCount > 0 ? Math.round((votedCount / totalCount) * 100) : 0}%
+                </span>
+              </div>
+              <div className="w-full bg-[#0A0E1A] rounded-full h-3 overflow-hidden">
+                <div
+                  className="h-full bg-[#00FF88] rounded-full transition-all duration-500"
+                  style={{
+                    width: `${totalCount > 0 ? (votedCount / totalCount) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+              <div className="mt-3 flex gap-6 text-xs font-mono text-gray-400">
+                <span>
+                  참가자: {users.filter((u) => u.role === "participant" && u.hasVoted).length} /{" "}
+                  {users.filter((u) => u.role === "participant").length}
+                </span>
+                <span>
+                  심사위원: {users.filter((u) => u.role === "judge" && u.hasVoted).length} /{" "}
+                  {users.filter((u) => u.role === "judge").length}
+                </span>
+              </div>
+            </div>
+
+            {/* Vote Counts per Team */}
+            <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
+              <h2 className="text-[#00FF88] font-mono font-semibold mb-4">팀별 득표 현황</h2>
+              <div className="space-y-3">
+                {teams
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      b.judgeVoteCount + b.participantVoteCount -
+                      (a.judgeVoteCount + a.participantVoteCount)
+                  )
+                  .map((team) => {
+                    const total = team.judgeVoteCount + team.participantVoteCount;
+                    const pct = maxVotes > 0 ? (total / maxVotes) * 100 : 0;
+                    return (
+                      <div key={team.id}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-mono text-sm text-white">
+                            {team.emoji} {team.name}
+                          </span>
+                          <div className="flex gap-4 text-xs font-mono text-gray-400">
+                            <span className="text-[#FF6B35]">심사: {team.judgeVoteCount}</span>
+                            <span className="text-[#00FF88]">참가자: {team.participantVoteCount}</span>
+                            <span className="text-white font-bold">총: {total}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 h-4">
+                          <div
+                            className="bg-[#FF6B35]/70 rounded-l transition-all duration-500"
+                            style={{
+                              width: `${maxVotes > 0 ? (team.judgeVoteCount / maxVotes) * 100 : 0}%`,
+                            }}
+                          />
+                          <div
+                            className="bg-[#00FF88]/70 rounded-r transition-all duration-500"
+                            style={{
+                              width: `${maxVotes > 0 ? (team.participantVoteCount / maxVotes) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                {teams.length === 0 && (
+                  <div className="text-gray-500 font-mono text-sm text-center py-4">
+                    등록된 팀이 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Score Preview */}
+            <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
+              <h2 className="text-[#00FF88] font-mono font-semibold mb-4">
+                점수 미리보기 (TOP {Math.min(10, teams.length)})
+              </h2>
+              <div className="space-y-2">
+                {top10.map((score) => (
+                  <div
+                    key={score.teamId}
+                    className="flex items-center justify-between p-3 rounded-lg bg-[#0A0E1A]/50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`font-mono text-sm font-bold w-6 text-center ${
+                          score.rank === 1
+                            ? "text-yellow-400"
+                            : score.rank === 2
+                            ? "text-gray-300"
+                            : score.rank === 3
+                            ? "text-amber-600"
+                            : "text-gray-500"
+                        }`}
+                      >
+                        #{score.rank}
+                      </span>
+                      <span className="text-lg">{score.emoji}</span>
+                      <span className="font-mono text-sm text-white">{score.teamName}</span>
+                    </div>
+                    <div className="flex gap-6 text-xs font-mono">
+                      <span className="text-gray-400">
+                        심: {score.judgeNormalized.toFixed(1)}
+                      </span>
+                      <span className="text-gray-400">
+                        참: {score.participantNormalized.toFixed(1)}
+                      </span>
+                      <span className="text-[#00FF88] font-bold">
+                        {score.finalScore.toFixed(2)}점
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {top10.length === 0 && (
+                  <div className="text-gray-500 font-mono text-sm text-center py-4">
+                    투표 데이터가 없습니다.
+                  </div>
+                )}
+              </div>
+              {eventConfig && (
+                <div className="mt-3 text-xs font-mono text-gray-500">
+                  가중치: 심사위원 {(eventConfig.judgeWeight * 100).toFixed(0)}% /{" "}
+                  참가자 {(eventConfig.participantWeight * 100).toFixed(0)}%
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="h-12" />
+      </div>
+    </div>
+  );
+}

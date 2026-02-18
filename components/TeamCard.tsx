@@ -1,0 +1,86 @@
+"use client";
+
+import { motion } from "framer-motion";
+import { Check, Ban } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { Team } from "@/lib/types";
+
+interface TeamCardProps {
+  team: Team;
+  isSelected: boolean;
+  isOwnTeam: boolean;
+  onToggle: (teamId: string) => void;
+  disabled?: boolean;
+}
+
+export function TeamCard({
+  team,
+  isSelected,
+  isOwnTeam,
+  onToggle,
+  disabled = false,
+}: TeamCardProps) {
+  const isDisabled = disabled || isOwnTeam;
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={!isDisabled ? { scale: 1.02 } : undefined}
+      whileTap={!isDisabled ? { scale: 0.98 } : undefined}
+      onClick={() => !isDisabled && onToggle(team.id)}
+      className={cn(
+        "relative rounded-xl border p-5 cursor-pointer transition-all duration-300",
+        isSelected
+          ? "border-primary/60 bg-primary/5 card-glow-selected"
+          : "border-border bg-card card-glow hover:border-primary/30",
+        isOwnTeam && "opacity-50 cursor-not-allowed border-destructive/30",
+        disabled && !isOwnTeam && "cursor-not-allowed"
+      )}
+    >
+      {/* Selection indicator */}
+      {isSelected && (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="absolute -top-2 -right-2 w-7 h-7 bg-primary rounded-full flex items-center justify-center shadow-lg"
+        >
+          <Check className="w-4 h-4 text-primary-foreground" />
+        </motion.div>
+      )}
+
+      {/* Own team indicator */}
+      {isOwnTeam && (
+        <div className="absolute -top-2 -right-2 w-7 h-7 bg-destructive rounded-full flex items-center justify-center">
+          <Ban className="w-4 h-4 text-white" />
+        </div>
+      )}
+
+      {/* Team emoji */}
+      <div className="text-4xl mb-3">{team.emoji}</div>
+
+      {/* Team name */}
+      <h3
+        className={cn(
+          "font-mono font-bold text-lg mb-1",
+          isSelected ? "text-primary glow-green" : "text-foreground"
+        )}
+      >
+        {team.name}
+      </h3>
+
+      {/* Team description */}
+      <p className="text-sm text-muted-foreground line-clamp-2">
+        {team.description}
+      </p>
+
+      {/* Own team label */}
+      {isOwnTeam && (
+        <div className="mt-3 text-xs font-mono text-destructive">
+          // 자기 팀에는 투표할 수 없습니다
+        </div>
+      )}
+    </motion.div>
+  );
+}
