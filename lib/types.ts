@@ -58,3 +58,36 @@ export interface TeamScore {
   finalScore: number;
   rank: number;
 }
+
+// Chat types
+export type ChatRoomType = "global" | "team";
+export type ChatMessageType = "text" | "system";
+
+export interface ChatRoom {
+  id: string;
+  type: ChatRoomType;
+  teamId: string | null;
+  name: string;
+  lastMessageAt: Date | null;
+  lastMessagePreview: string | null;
+  lastMessageSender: string | null;
+  messageCount: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  text: string;
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  senderTeamId: string | null;
+  senderTeamName: string | null;
+  createdAt: Date;
+  deleted: boolean;
+  deletedBy?: string;
+  type: ChatMessageType;
+}
+
+export interface RoomReadState {
+  lastReadAt: Date;
+}

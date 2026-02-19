@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Ban, Info } from "lucide-react";
+import { Check, Ban, Info, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Team } from "@/lib/types";
 
@@ -37,7 +37,7 @@ export function TeamCard({
         isSelected
           ? "border-primary/60 bg-primary/5 card-glow-selected"
           : "border-border bg-card card-glow hover:border-primary/30",
-        isOwnTeam && "opacity-50 cursor-not-allowed border-destructive/30",
+        isOwnTeam && "border-[#4DAFFF]/40 bg-[#4DAFFF]/5 cursor-default",
         disabled && !isOwnTeam && "cursor-not-allowed"
       )}
     >
@@ -53,9 +53,10 @@ export function TeamCard({
       )}
 
       {/* Own team indicator */}
-      {isOwnTeam && (
-        <div className="absolute -top-2 -right-2 w-7 h-7 bg-destructive rounded-full flex items-center justify-center">
-          <Ban className="w-4 h-4 text-white" />
+      {isOwnTeam && !isSelected && (
+        <div className="absolute -top-2 -right-2 px-2 h-6 bg-[#4DAFFF] rounded-full flex items-center justify-center gap-1 shadow-lg shadow-[#4DAFFF]/20">
+          <Star className="w-3 h-3 text-white fill-white" />
+          <span className="font-mono text-[10px] font-bold text-white">MY TEAM</span>
         </div>
       )}
 
@@ -110,8 +111,8 @@ export function TeamCard({
 
       {/* Own team label */}
       {isOwnTeam && (
-        <div className="mt-2 text-xs font-mono text-destructive">
-          // 자기 팀에는 투표할 수 없습니다
+        <div className="mt-2 text-xs font-mono text-[#4DAFFF]">
+          // 내 팀 — 다른 팀에 투표해주세요
         </div>
       )}
     </motion.div>

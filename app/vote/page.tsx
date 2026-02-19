@@ -26,6 +26,7 @@ import { LogOut, CheckCircle2, Pencil, Trophy, UserPen } from "lucide-react";
 import Link from "next/link";
 import { TeamEditDialog } from "@/components/TeamEditDialog";
 import { MemberProfileDialog } from "@/components/MemberProfileDialog";
+import { ChatPanel } from "@/components/chat/ChatPanel";
 
 export default function VotePage() {
   const router = useRouter();
@@ -379,12 +380,18 @@ export default function VotePage() {
               </p>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {teams.map((team) => (
+              {[...teams]
+                .sort((a, b) => {
+                  const aIsOwn = a.id === user.teamId ? -1 : 0;
+                  const bIsOwn = b.id === user.teamId ? -1 : 0;
+                  return aIsOwn - bIsOwn;
+                })
+                .map((team) => (
                 <TeamCard
                   key={team.id}
                   team={team}
                   isSelected={isVotingActive && selectedTeams.includes(team.id)}
-                  isOwnTeam={isVotingActive && user.teamId === team.id}
+                  isOwnTeam={user.teamId === team.id}
                   onToggle={isVotingActive ? handleToggle : () => {}}
                   onInspect={setInspectTeam}
                   disabled={
@@ -462,6 +469,9 @@ export default function VotePage() {
           team={myTeam}
         />
       )}
+
+      {/* Chat panel */}
+      {eventConfig && <ChatPanel />}
     </div>
   );
 }

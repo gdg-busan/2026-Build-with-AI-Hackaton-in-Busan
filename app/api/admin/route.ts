@@ -8,6 +8,7 @@ const eventRef = () => adminDb.collection("events").doc(EVENT_ID);
 const teamsCol = () => eventRef().collection("teams");
 const usersCol = () => eventRef().collection("users");
 const votesCol = () => eventRef().collection("votes");
+const chatRoomsCol = () => eventRef().collection("chatRooms");
 
 async function verifyAdmin(request: NextRequest) {
   const authorization = request.headers.get("Authorization");
@@ -41,6 +42,20 @@ export async function POST(request: NextRequest) {
             maxVotesPerUser: 3,
             title: "GDG Busan - Build with AI",
             createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+        // Auto-create global chat room
+        const globalRoomRef = chatRoomsCol().doc("global");
+        const globalRoomSnap = await globalRoomRef.get();
+        if (!globalRoomSnap.exists) {
+          await globalRoomRef.set({
+            type: "global",
+            teamId: null,
+            name: "전체 채팅",
+            lastMessageAt: null,
+            lastMessagePreview: null,
+            lastMessageSender: null,
+            messageCount: 0,
           });
         }
         return NextResponse.json({ success: true });
@@ -358,6 +373,31 @@ export async function POST(request: NextRequest) {
 
         await batch.commit();
 
+        // 8. Auto-create chat rooms (global + per team)
+        const chatBatch = adminDb.batch();
+        const globalRoom = chatRoomsCol().doc("global");
+        chatBatch.set(globalRoom, {
+          type: "global",
+          teamId: null,
+          name: "전체 채팅",
+          lastMessageAt: null,
+          lastMessagePreview: null,
+          lastMessageSender: null,
+          messageCount: 0,
+        }, { merge: true });
+        for (const tr of teamRefs) {
+          chatBatch.set(chatRoomsCol().doc(tr.id), {
+            type: "team",
+            teamId: tr.id,
+            name: `${teamResults.find(t => t.id === tr.id)?.name ?? "팀"} 채팅`,
+            lastMessageAt: null,
+            lastMessagePreview: null,
+            lastMessageSender: null,
+            messageCount: 0,
+          }, { merge: true });
+        }
+        await chatBatch.commit();
+
         return NextResponse.json({
           success: true,
           teams: teamResults,
@@ -368,6 +408,77 @@ export async function POST(request: NextRequest) {
             judgeCount,
           },
         });
+      }
+
+      case "initChatRooms": {
+        // Create global chat room
+        const globalRef = chatRoomsCol().doc("global");
+        const globalSnap = await globalRef.get();
+        if (!globalSnap.exists) {
+          await globalRef.set({
+            type: "global",
+            teamId: null,
+            name: "전체 채팅",
+            lastMessageAt: null,
+            lastMessagePreview: null,
+            lastMessageSender: null,
+            messageCount: 0,
+          });
+        }
+
+        // Create team chat rooms
+        const teamsSnap = await teamsCol().get();
+        const batch = adminDb.batch();
+        let created = 0;
+        for (const teamDoc of teamsSnap.docs) {
+          const roomRef = chatRoomsCol().doc(teamDoc.id);
+          const roomSnap = await roomRef.get();
+          if (!roomSnap.exists) {
+            batch.set(roomRef, {
+              type: "team",
+              teamId: teamDoc.id,
+              name: `${teamDoc.data().name} 채팅`,
+              lastMessageAt: null,
+              lastMessagePreview: null,
+              lastMessageSender: null,
+              messageCount: 0,
+            });
+            created++;
+          }
+        }
+        if (created > 0) await batch.commit();
+
+        return NextResponse.json({
+          success: true,
+          created: created + (globalSnap.exists ? 0 : 1),
+        });
+      }
+
+      case "deleteMessage": {
+        const { roomId, messageId } = data;
+        const msgRef = chatRoomsCol().doc(roomId).collection("messages").doc(messageId);
+        const msgSnap = await msgRef.get();
+        if (!msgSnap.exists) {
+          return NextResponse.json({ error: "Message not found" }, { status: 404 });
+        }
+        await msgRef.update({
+          deleted: true,
+          deletedBy: admin.uid,
+        });
+        return NextResponse.json({ success: true });
+      }
+
+      case "muteUser": {
+        const { userCode, duration } = data as { userCode: string; duration: number };
+        const mutedUntil = new Date(Date.now() + duration * 60 * 1000);
+        await usersCol().doc(userCode).update({ chatMutedUntil: mutedUntil });
+        return NextResponse.json({ success: true, mutedUntil });
+      }
+
+      case "unmuteUser": {
+        const { userCode } = data as { userCode: string };
+        await usersCol().doc(userCode).update({ chatMutedUntil: null });
+        return NextResponse.json({ success: true });
       }
 
       default:
