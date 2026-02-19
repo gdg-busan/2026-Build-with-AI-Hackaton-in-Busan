@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -41,7 +41,6 @@ export default function VotePage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [votedCount, setVotedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-  const [hasVoted, setHasVoted] = useState(false);
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -52,6 +51,7 @@ export default function VotePage() {
   const [myBio, setMyBio] = useState<string | null>(null);
   const [inspectTeam, setInspectTeam] = useState<Team | null>(null);
   const [inspectMembers, setInspectMembers] = useState<MemberProfile[]>([]);
+  const prevStatusRef = useRef<string | null>(null);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -66,11 +66,11 @@ export default function VotePage() {
     const unsub = onSnapshot(doc(getFirebaseDb(), "events", EVENT_ID), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        // 결과 공개 시 자동으로 결과 페이지로 이동
-        if (data.status === "revealed") {
+        // 결과 공개로 전환되는 순간에만 자동 리디렉트 (최초 1회)
+        if (data.status === "revealed" && prevStatusRef.current !== null && prevStatusRef.current !== "revealed") {
           router.push("/results");
-          return;
         }
+        prevStatusRef.current = data.status;
         setEventConfig({
           id: snap.id,
           status: data.status,
@@ -124,8 +124,8 @@ export default function VotePage() {
         );
         const myVote = snap.docs.find((d) => d.id === user.uid);
         if (myVote) {
-          setHasVoted(true);
           setVoteSuccess(true);
+          setSelectedTeams(myVote.data().selectedTeams ?? []);
         }
       }
     );
@@ -255,7 +255,8 @@ export default function VotePage() {
   const showTeams =
     eventConfig?.status === "waiting" ||
     eventConfig?.status === "voting" ||
-    eventConfig?.status === "closed";
+    eventConfig?.status === "closed" ||
+    eventConfig?.status === "revealed";
 
   if (loading) {
     return (
@@ -288,8 +289,8 @@ export default function VotePage() {
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            {/* Profile edit button */}
-            {(user.role === "participant" || user.role === "judge") && (
+            {/* Profile edit button - hidden when revealed */}
+            {(user.role === "participant" || user.role === "judge") && eventConfig?.status !== "revealed" && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -300,8 +301,8 @@ export default function VotePage() {
                 프로필
               </Button>
             )}
-            {/* Team edit button - participants only */}
-            {user.role === "participant" && myTeam && (
+            {/* Team edit button - participants only, hidden when revealed */}
+            {user.role === "participant" && myTeam && eventConfig?.status !== "revealed" && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -337,9 +338,8 @@ export default function VotePage() {
             </Button>
           </div>
         </div>
+        <AnnouncementTicker />
       </header>
-
-      <AnnouncementTicker />
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         {/* Countdown timer */}
@@ -351,11 +351,15 @@ export default function VotePage() {
             <p className="font-mono text-2xl text-primary glow-green">
               {eventConfig.status === "waiting"
                 ? "$ waiting_for_vote_start..."
+                : eventConfig.status === "revealed"
+                ? "$ results_revealed!"
                 : "$ voting_closed"}
             </p>
             <p className="text-muted-foreground font-mono text-sm">
               {eventConfig.status === "waiting"
                 ? "투표가 아직 시작되지 않았습니다. 잠시 기다려 주세요."
+                : eventConfig.status === "revealed"
+                ? "결과가 공개되었습니다. 결과 페이지에서 확인하세요!"
                 : "투표가 종료되었습니다."}
             </p>
           </div>
@@ -400,7 +404,7 @@ export default function VotePage() {
           <>
             {!isVotingActive && (
               <p className="font-mono text-xs text-muted-foreground">
-                // 팀 목록 (읽기 전용)
+                {"// 팀 목록 (읽기 전용)"}
               </p>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -414,7 +418,7 @@ export default function VotePage() {
                 <TeamCard
                   key={team.id}
                   team={team}
-                  isSelected={isVotingActive && selectedTeams.includes(team.id)}
+                  isSelected={selectedTeams.includes(team.id)}
                   isOwnTeam={user.teamId === team.id}
                   onToggle={isVotingActive ? handleToggle : () => {}}
                   onInspect={handleInspect}
@@ -462,14 +466,10 @@ export default function VotePage() {
           if (!open) setInspectTeam(null);
         }}
         isSelected={
-          isVotingActive && inspectTeam
-            ? selectedTeams.includes(inspectTeam.id)
-            : false
+          inspectTeam ? selectedTeams.includes(inspectTeam.id) : false
         }
         isOwnTeam={
-          isVotingActive && inspectTeam
-            ? user.teamId === inspectTeam.id
-            : false
+          inspectTeam ? user.teamId === inspectTeam.id : false
         }
         canVote={isVotingActive && !voteSuccess}
         maxReached={selectedTeams.length >= maxVotes}

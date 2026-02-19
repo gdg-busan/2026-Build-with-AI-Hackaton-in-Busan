@@ -5,8 +5,6 @@ import { EVENT_ID } from "@/lib/constants";
 import type { UserRole } from "@/lib/types";
 import { trackMission } from "@/lib/mission-tracker";
 
-// Rate limit store: uid -> last feedback timestamp
-const rateLimitMap = new Map<string, number>();
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,16 +36,19 @@ export async function POST(req: NextRequest) {
 
     const uid = decodedToken.uid;
 
-    // Rate limit: 1 feedback per 5 seconds per uid
-    const now = Date.now();
-    const lastFeedback = rateLimitMap.get(uid);
-    if (lastFeedback && now - lastFeedback < 5000) {
-      return NextResponse.json(
-        { error: "너무 빠르게 피드백을 보내고 있습니다. 잠시 후 다시 시도해 주세요." },
-        { status: 429 }
-      );
+    // Firestore-based rate limiting (5s between feedbacks)
+    const rateLimitRef = adminDb.doc(`events/${EVENT_ID}/users/${uid}`);
+    const rateLimitSnap = await rateLimitRef.get();
+    if (rateLimitSnap.exists) {
+      const rlData = rateLimitSnap.data()!;
+      const lastFeedbackAt = rlData.lastFeedbackAt?.toDate?.() ?? null;
+      if (lastFeedbackAt && Date.now() - lastFeedbackAt.getTime() < 5000) {
+        return NextResponse.json(
+          { error: "너무 빠르게 피드백을 보내고 있습니다. 잠시 후 다시 시도해 주세요." },
+          { status: 429 }
+        );
+      }
     }
-    rateLimitMap.set(uid, now);
 
     // Parse request body
     const body = await req.json();
@@ -117,6 +118,11 @@ export async function POST(req: NextRequest) {
       createdAt: FieldValue.serverTimestamp(),
       reply: null,
       repliedAt: null,
+    });
+
+    // Update rate limit timestamp
+    await adminDb.doc(`events/${EVENT_ID}/users/${uid}`).update({
+      lastFeedbackAt: FieldValue.serverTimestamp(),
     });
 
     // Track mission progress (fire and forget)

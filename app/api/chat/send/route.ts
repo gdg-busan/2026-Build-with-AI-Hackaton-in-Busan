@@ -5,8 +5,6 @@ import { EVENT_ID } from "@/lib/constants";
 import type { UserRole } from "@/lib/types";
 import { trackMission } from "@/lib/mission-tracker";
 
-// In-memory rate limiting: uid -> last message timestamp (ms)
-const lastMessageTime = new Map<string, number>();
 
 export async function POST(req: NextRequest) {
   try {
@@ -108,18 +106,16 @@ export async function POST(req: NextRequest) {
           );
         }
       }
-    }
 
-    // Simple in-memory rate limiting (1500ms between messages)
-    const now = Date.now();
-    const last = lastMessageTime.get(uid);
-    if (last !== undefined && now - last < 1500) {
-      return NextResponse.json(
-        { error: "메시지를 너무 빠르게 전송하고 있습니다. 잠시 후 다시 시도해주세요" },
-        { status: 429 }
-      );
+      // Firestore-based rate limiting (1500ms between messages)
+      const lastChatAt = userData.lastChatAt?.toDate?.() ?? null;
+      if (lastChatAt && Date.now() - lastChatAt.getTime() < 1500) {
+        return NextResponse.json(
+          { error: "메시지를 너무 빠르게 전송하고 있습니다. 잠시 후 다시 시도해주세요" },
+          { status: 429 }
+        );
+      }
     }
-    lastMessageTime.set(uid, now);
 
     // Look up team name if user has a team
     let senderTeamName: string | null = null;
@@ -158,6 +154,9 @@ export async function POST(req: NextRequest) {
       lastMessageSender: name,
       messageCount: FieldValue.increment(1),
     });
+
+    // Update rate limit timestamp
+    batch.update(userRef, { lastChatAt: FieldValue.serverTimestamp() });
 
     await batch.commit();
 

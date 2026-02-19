@@ -83,7 +83,7 @@ export default function LoginPage() {
         <div className="border border-[#00FF88]/20 bg-[#1A2235]/60 backdrop-blur rounded-lg p-8 space-y-6">
           <div className="space-y-1">
             <p className="font-mono text-xs text-[#4DAFFF] tracking-wider">
-              // 참가자 코드 입력
+              {"// 참가자 코드 입력"}
             </p>
             <p className="font-mono text-xs text-[#00FF88]/50">
               배정받은 고유 코드를 입력하세요

@@ -20,6 +20,37 @@ import type { ChatMessage } from "@/lib/types";
 
 const PAGE_SIZE = 40;
 
+const toDate = (value: unknown): Date => {
+  if (!value) return new Date(0);
+  if (value instanceof Date) return value;
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof (value as { toDate: () => Date }).toDate === "function"
+  ) {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  return new Date(0);
+};
+
+const docToMessage = (d: QueryDocumentSnapshot): ChatMessage => {
+  const data = d.data();
+  return {
+    id: d.id,
+    text: data.text ?? "",
+    senderId: data.senderId ?? "",
+    senderName: data.senderName ?? "",
+    senderRole: data.senderRole ?? "participant",
+    senderTeamId: data.senderTeamId ?? null,
+    senderTeamName: data.senderTeamName ?? null,
+    createdAt: toDate(data.createdAt),
+    deleted: data.deleted ?? false,
+    deletedBy: data.deletedBy,
+    type: data.type ?? "text",
+  } satisfies ChatMessage;
+};
+
 export function useChatRoom(roomId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,56 +60,17 @@ export function useChatRoom(roomId: string | null) {
   const oldestDocRef = useRef<QueryDocumentSnapshot | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  const toDate = (value: unknown): Date => {
-    if (!value) return new Date(0);
-    if (value instanceof Date) return value;
-    if (
-      typeof value === "object" &&
-      value !== null &&
-      "toDate" in value &&
-      typeof (value as { toDate: () => Date }).toDate === "function"
-    ) {
-      return (value as { toDate: () => Date }).toDate();
-    }
-    return new Date(0);
-  };
-
-  const docToMessage = (d: QueryDocumentSnapshot): ChatMessage => {
-    const data = d.data();
-    return {
-      id: d.id,
-      text: data.text ?? "",
-      senderId: data.senderId ?? "",
-      senderName: data.senderName ?? "",
-      senderRole: data.senderRole ?? "participant",
-      senderTeamId: data.senderTeamId ?? null,
-      senderTeamName: data.senderTeamName ?? null,
-      createdAt: toDate(data.createdAt),
-      deleted: data.deleted ?? false,
-      deletedBy: data.deletedBy,
-      type: data.type ?? "text",
-    } satisfies ChatMessage;
-  };
-
   useEffect(() => {
     if (unsubscribeRef.current) {
       unsubscribeRef.current();
       unsubscribeRef.current = null;
     }
 
+    oldestDocRef.current = null;
+
     if (!roomId) {
-      setMessages([]);
-      setLoading(false);
-      setError(null);
-      setHasMore(false);
-      oldestDocRef.current = null;
       return;
     }
-
-    setLoading(true);
-    setError(null);
-    setMessages([]);
-    oldestDocRef.current = null;
 
     const db = getFirebaseDb();
     const messagesRef = collection(
@@ -91,17 +83,24 @@ export function useChatRoom(roomId: string | null) {
     );
     const q = query(messagesRef, orderBy("createdAt", "desc"), limit(PAGE_SIZE));
 
+    // Set loading via the snapshot handler on first call
+    let firstSnapshot = true;
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
+        if (firstSnapshot) {
+          firstSnapshot = false;
+        }
         const docs = snapshot.docs;
         const mapped = docs.map(docToMessage).reverse();
         setMessages(mapped);
         setHasMore(docs.length === PAGE_SIZE);
+        setLoading(false);
+        setError(null);
         if (docs.length > 0) {
           oldestDocRef.current = docs[docs.length - 1];
         }
-        setLoading(false);
       },
       (err) => {
         setError(err.message);
@@ -114,6 +113,10 @@ export function useChatRoom(roomId: string | null) {
     return () => {
       unsubscribe();
       unsubscribeRef.current = null;
+      setMessages([]);
+      setHasMore(false);
+      setLoading(false);
+      setError(null);
     };
   }, [roomId]);
 

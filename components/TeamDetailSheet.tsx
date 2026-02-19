@@ -54,10 +54,7 @@ export function TeamDetailSheet({
 
   // Subscribe to recent cheers
   useEffect(() => {
-    if (!team) {
-      setCheers([]);
-      return;
-    }
+    if (!team) return;
     const cheersRef = collection(
       getFirebaseDb(),
       "events",
@@ -80,8 +77,11 @@ export function TeamDetailSheet({
         })
       );
     });
-    return () => unsub();
-  }, [team?.id]);
+    return () => {
+      unsub();
+      setCheers([]);
+    };
+  }, [team]);
 
   if (!team) return null;
 
@@ -144,7 +144,7 @@ export function TeamDetailSheet({
           {/* Description */}
           <div className="space-y-2">
             <div className="font-mono text-xs text-muted-foreground">
-              <span className="text-primary/60">//</span> description
+              <span className="text-primary/60">{"// description"}</span>
             </div>
             <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
               {team.description || "설명이 없습니다."}
@@ -154,7 +154,7 @@ export function TeamDetailSheet({
           {/* Members */}
           <div className="space-y-2">
             <div className="font-mono text-xs text-muted-foreground">
-              <span className="text-primary/60">//</span> members [{team.memberUserIds.length}]
+              <span className="text-primary/60">{"// members"}</span> [{team.memberUserIds.length}]
             </div>
             <div className="space-y-2">
               {members.length > 0 ? (
@@ -203,7 +203,7 @@ export function TeamDetailSheet({
           {team.projectUrl && (
             <div className="space-y-2">
               <div className="font-mono text-xs text-muted-foreground">
-                <span className="text-primary/60">//</span> project
+                <span className="text-primary/60">{"// project"}</span>
               </div>
               <a
                 href={team.projectUrl}
@@ -223,7 +223,7 @@ export function TeamDetailSheet({
           {hasShowcase && (
             <div className="space-y-3">
               <div className="font-mono text-xs text-muted-foreground">
-                <span className="text-primary/60">//</span> showcase
+                <span className="text-primary/60">{"// showcase"}</span>
               </div>
 
               {/* Tech stack tags */}
@@ -276,7 +276,7 @@ export function TeamDetailSheet({
           {/* Vote action */}
           <div className="space-y-2">
             <div className="font-mono text-xs text-muted-foreground">
-              <span className="text-primary/60">//</span> action
+              <span className="text-primary/60">{"// action"}</span>
             </div>
 
             {isOwnTeam ? (
@@ -314,7 +314,7 @@ export function TeamDetailSheet({
           {cheers.length > 0 && (
             <div className="space-y-3">
               <div className="font-mono text-xs text-muted-foreground">
-                <span className="text-primary/60">//</span> cheers [{cheers.length}]
+                <span className="text-primary/60">{"// cheers"}</span> [{cheers.length}]
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {cheers.map((cheer) => (
@@ -336,7 +336,7 @@ export function TeamDetailSheet({
           {/* Feedback section */}
           <div className="space-y-3">
             <div className="font-mono text-xs text-muted-foreground">
-              <span className="text-primary/60">//</span> feedback
+              <span className="text-primary/60">{"// feedback"}</span>
             </div>
             <FeedbackBoard teamId={team.id} isTeamMember={isTeamMember} />
           </div>

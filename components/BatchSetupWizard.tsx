@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 interface BatchSetupWizardProps {
   onComplete: () => void;
-  callAdminApi: (action: string, data: Record<string, unknown>) => Promise<any>;
+  callAdminApi: (action: string, data: Record<string, unknown>) => Promise<BatchResult>;
 }
 
 interface ConfigState {

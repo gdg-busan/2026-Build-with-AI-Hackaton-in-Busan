@@ -212,13 +212,13 @@ export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
       {loading ? (
         <div className="text-center py-4">
           <span className="font-mono text-xs text-muted-foreground animate-pulse">
-            // loading feedbacks...
+            {"// loading feedbacks..."}
           </span>
         </div>
       ) : feedbacks.length === 0 ? (
         <div className="text-center py-4">
           <span className="font-mono text-xs text-muted-foreground">
-            // 아직 피드백이 없습니다
+            {"// 아직 피드백이 없습니다"}
           </span>
         </div>
       ) : (
@@ -254,7 +254,7 @@ export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
                 {fb.reply && (
                   <div className="pl-3 border-l-2 border-[#4DAFFF]/40 mt-2">
                     <p className="text-xs font-mono text-[#4DAFFF]/80 mb-0.5">
-                      // 팀 답글
+                      {"// 팀 답글"}
                     </p>
                     <p className="text-sm text-[#4DAFFF]/90">{fb.reply}</p>
                   </div>
@@ -301,7 +301,7 @@ export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
                         onClick={() => setReplyingTo(fb.id)}
                         className="text-xs font-mono text-muted-foreground/60 hover:text-[#4DAFFF]/80 transition-colors"
                       >
-                        // 답글 달기
+                        {"// 답글 달기"}
                       </button>
                     )}
                   </div>

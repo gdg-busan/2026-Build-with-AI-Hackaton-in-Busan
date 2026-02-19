@@ -156,13 +156,13 @@ export function TeamEditDialog({ open, onOpenChange, team }: TeamEditDialogProps
               className="font-mono bg-background border-border focus:border-primary/60 text-foreground"
             />
             <p className="text-xs font-mono text-muted-foreground/60">
-              // 결과물 링크 (GitHub, 데모 사이트 등)
+              {"// 결과물 링크 (GitHub, 데모 사이트 등)"}
             </p>
           </div>
 
           {/* Showcase section divider */}
           <div className="border-t border-border/40 pt-2">
-            <p className="font-mono text-xs text-primary/60 mb-3">// showcase links</p>
+            <p className="font-mono text-xs text-primary/60 mb-3">{"// showcase links"}</p>
 
             {/* Demo URL */}
             <div className="space-y-1.5 mb-3">
@@ -196,7 +196,7 @@ export function TeamEditDialog({ open, onOpenChange, team }: TeamEditDialogProps
 
           {/* Tech Stack */}
           <div className="space-y-2">
-            <p className="font-mono text-xs text-primary/60">// tech stack</p>
+            <p className="font-mono text-xs text-primary/60">{"// tech stack"}</p>
 
             {/* Preset tags */}
             <div className="flex flex-wrap gap-1.5">

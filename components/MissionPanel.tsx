@@ -147,7 +147,7 @@ export function MissionPanel() {
 
           <div className="px-5 py-3 border-t border-primary/20 relative z-10">
             <p className="text-[10px] text-muted-foreground/60 font-mono text-center">
-              // 미션을 완료하고 배지를 획득하세요
+              {"// 미션을 완료하고 배지를 획득하세요"}
             </p>
           </div>
         </SheetContent>

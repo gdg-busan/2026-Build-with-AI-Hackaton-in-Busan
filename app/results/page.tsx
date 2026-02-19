@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, doc, onSnapshot, getDocs } from "firebase/firestore";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { calculateScores } from "@/lib/scoring";
@@ -173,7 +173,9 @@ export default function ResultsPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0E1A] dot-grid">
-      <AnnouncementTicker />
+      <div className="sticky top-0 z-40">
+        <AnnouncementTicker />
+      </div>
       <div className="max-w-3xl mx-auto py-10 px-4">
         {/* Header */}
         <motion.div

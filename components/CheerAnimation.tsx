@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   collection,
@@ -24,8 +24,7 @@ interface CheerAnimationProps {
 
 export function CheerAnimation({ teamId }: CheerAnimationProps) {
   const [floaters, setFloaters] = useState<FloatingEmoji[]>([]);
-  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
-  const [initialized, setInitialized] = useState(false);
+  const seenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const cheersRef = collection(
@@ -43,9 +42,7 @@ export function CheerAnimation({ teamId }: CheerAnimationProps) {
     const unsub = onSnapshot(q, (snap) => {
       if (isFirst) {
         // Seed seenIds with existing docs so we don't animate on mount
-        const initial = new Set<string>(snap.docs.map((d) => d.id));
-        setSeenIds(initial);
-        setInitialized(true);
+        snap.docs.forEach((d) => seenIdsRef.current.add(d.id));
         isFirst = false;
         return;
       }
@@ -54,35 +51,27 @@ export function CheerAnimation({ teamId }: CheerAnimationProps) {
         if (change.type !== "added") return;
         const docId = change.doc.id;
 
-        setSeenIds((prev) => {
-          if (prev.has(docId)) return prev;
-          const next = new Set(prev);
-          next.add(docId);
+        if (seenIdsRef.current.has(docId)) return;
+        seenIdsRef.current.add(docId);
 
-          const emoji = change.doc.data().emoji as string;
-          // Use unique key to avoid React duplicate key warnings
-          const floaterId = `${docId}_${Date.now()}`;
-          const floater: FloatingEmoji = {
-            id: floaterId,
-            emoji,
-            x: 20 + Math.random() * 60, // 20-80% horizontal
-          };
+        const emoji = change.doc.data().emoji as string;
+        // Use unique key to avoid React duplicate key warnings
+        const floaterId = `${docId}_${Date.now()}`;
+        const floater: FloatingEmoji = {
+          id: floaterId,
+          emoji,
+          x: 20 + Math.random() * 60, // 20-80% horizontal
+        };
 
-          setFloaters((f) => [...f, floater]);
-          setTimeout(() => {
-            setFloaters((f) => f.filter((item) => item.id !== floaterId));
-          }, 1500);
-
-          return next;
-        });
+        setFloaters((f) => [...f, floater]);
+        setTimeout(() => {
+          setFloaters((f) => f.filter((item) => item.id !== floaterId));
+        }, 1500);
       });
     });
 
     return () => unsub();
   }, [teamId]);
-
-  // Suppress unused warning
-  void initialized;
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
