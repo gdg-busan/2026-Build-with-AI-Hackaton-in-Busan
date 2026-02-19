@@ -31,6 +31,40 @@ service cloud.firestore {
           && !exists(/databases/$(database)/documents/events/$(eventId)/votes/$(voterId));
         allow update, delete: if false;
       }
+
+      // Chat rooms - metadata managed by admins
+      match /chatRooms/{roomId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.token.role == 'admin';
+
+        // Chat messages - immutable once created; soft delete via admin API
+        match /messages/{messageId} {
+          allow read: if request.auth != null && (
+            roomId == 'global' ||
+            request.auth.token.teamId == roomId ||
+            request.auth.token.role == 'admin'
+          );
+          allow create: if request.auth != null
+            && (
+              roomId == 'global' ||
+              request.auth.token.teamId == roomId ||
+              request.auth.token.role == 'admin'
+            )
+            && request.resource.data.text is string
+            && request.resource.data.text.size() >= 1
+            && request.resource.data.text.size() <= 500
+            && request.resource.data.senderId == request.auth.uid
+            && request.resource.data.deleted == false;
+          allow update: if false;
+          allow delete: if request.auth != null && request.auth.token.role == 'admin';
+        }
+      }
+
+      // Per-user read state for chat rooms
+      match /users/{uniqueCode}/roomState/{roomId} {
+        allow read: if request.auth != null && request.auth.token.uniqueCode == uniqueCode;
+        allow write: if request.auth != null && request.auth.token.uniqueCode == uniqueCode;
+      }
     }
 
     // Deny everything else

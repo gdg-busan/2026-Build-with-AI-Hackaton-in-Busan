@@ -6,6 +6,10 @@ import {
   collection,
   doc,
   onSnapshot,
+  query,
+  orderBy,
+  limit,
+
 } from "firebase/firestore";
 import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
@@ -13,11 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { calculateScores, getTop10 } from "@/lib/scoring";
 import { TEAM_EMOJIS, EVENT_ID } from "@/lib/constants";
-import type { Team, User, EventConfig, EventStatus, UserRole } from "@/lib/types";
+import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatRoom } from "@/lib/types";
 import { toast } from "sonner";
 import BatchSetupWizard from "@/components/BatchSetupWizard";
 
-type TabType = "setup" | "event" | "teams" | "users" | "monitor";
+type TabType = "setup" | "event" | "teams" | "users" | "monitor" | "chat";
 
 const STATUS_COLORS: Record<EventStatus, string> = {
   waiting: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -73,6 +77,11 @@ export default function AdminPage() {
   const [codeRole, setCodeRole] = useState<UserRole>("participant");
   const [generatingCodes, setGeneratingCodes] = useState(false);
 
+  // Chat monitor state
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+  const [chatMessages, setChatMessages] = useState<(ChatMessage & { roomId: string; roomName: string })[]>([]);
+  const [selectedChatRoom, setSelectedChatRoom] = useState<string>("global");
+
   // Loading states
   const [submitting, setSubmitting] = useState(false);
 
@@ -123,12 +132,74 @@ export default function AdminPage() {
       );
     });
 
+    // Subscribe to chat rooms
+    const chatRoomsUnsub = onSnapshot(
+      collection(eventDocRef, "chatRooms"),
+      (snap) => {
+        setChatRooms(
+          snap.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              type: data.type,
+              teamId: data.teamId ?? null,
+              name: data.name,
+              lastMessageAt: data.lastMessageAt?.toDate?.() ?? null,
+              lastMessagePreview: data.lastMessagePreview ?? null,
+              lastMessageSender: data.lastMessageSender ?? null,
+              messageCount: data.messageCount ?? 0,
+            } as ChatRoom;
+          })
+        );
+      }
+    );
+
     return () => {
       eventUnsub();
       teamsUnsub();
       usersUnsub();
+      chatRoomsUnsub();
     };
   }, [user]);
+
+  // Subscribe to messages for selected chat room
+  useEffect(() => {
+    if (!user || user.role !== "admin" || !selectedChatRoom) return;
+    const db = getFirebaseDb();
+    const messagesRef = collection(
+      db,
+      "events",
+      EVENT_ID,
+      "chatRooms",
+      selectedChatRoom,
+      "messages"
+    );
+    const messagesQuery = query(messagesRef, orderBy("createdAt", "desc"), limit(50));
+    const roomName =
+      chatRooms.find((r) => r.id === selectedChatRoom)?.name ?? selectedChatRoom;
+    const unsub = onSnapshot(messagesQuery, (snap) => {
+      setChatMessages(
+        snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            roomId: selectedChatRoom,
+            roomName,
+            text: data.text,
+            senderId: data.senderId,
+            senderName: data.senderName,
+            senderRole: data.senderRole,
+            senderTeamId: data.senderTeamId ?? null,
+            createdAt: data.createdAt?.toDate?.() ?? new Date(),
+            deleted: data.deleted ?? false,
+            deletedBy: data.deletedBy,
+            type: data.type ?? "text",
+          } as ChatMessage & { roomId: string; roomName: string };
+        })
+      );
+    });
+    return () => unsub();
+  }, [user, selectedChatRoom, chatRooms]);
 
   const getIdToken = useCallback(async () => {
     const currentUser = getFirebaseAuth().currentUser;
@@ -301,6 +372,45 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteMessage = async (roomId: string, messageId: string) => {
+    try {
+      await callAdminApi("deleteMessage", { roomId, messageId });
+      toast.success("메시지가 삭제되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const handleMuteUser = async (userCode: string, duration: number) => {
+    try {
+      await callAdminApi("muteUser", { userCode, duration });
+      toast.success(`${duration}분 채팅 제한이 적용되었습니다.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const handleUnmuteUser = async (userCode: string) => {
+    try {
+      await callAdminApi("unmuteUser", { userCode });
+      toast.success("채팅 제한이 해제되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const handleInitChatRooms = async () => {
+    setSubmitting(true);
+    try {
+      const result = await callAdminApi("initChatRooms", {});
+      toast.success(`채팅방 ${result.created}개가 생성되었습니다.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("클립보드에 복사되었습니다.");
@@ -335,6 +445,7 @@ export default function AdminPage() {
     { key: "teams", label: "팀 관리" },
     { key: "users", label: "사용자 & 코드" },
     { key: "monitor", label: "실시간 모니터" },
+    { key: "chat", label: "채팅 모니터" },
   ];
 
   return (
@@ -763,6 +874,7 @@ export default function AdminPage() {
                       <th className="text-left p-3">역할</th>
                       <th className="text-left p-3">팀</th>
                       <th className="text-left p-3">투표</th>
+                      <th className="text-left p-3">채팅</th>
                       <th className="text-left p-3">액션</th>
                     </tr>
                   </thead>
@@ -823,6 +935,27 @@ export default function AdminPage() {
                             >
                               {u.hasVoted ? "완료" : "미투표"}
                             </span>
+                          </td>
+                          <td className="p-3">
+                            {u.role !== "admin" && (() => {
+                              const mutedUntil = (u as User & { chatMutedUntil?: Date }).chatMutedUntil;
+                              const isMuted = mutedUntil && new Date(mutedUntil) > new Date();
+                              return isMuted ? (
+                                <button
+                                  onClick={() => handleUnmuteUser(u.uniqueCode)}
+                                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                                >
+                                  뮤트해제
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleMuteUser(u.uniqueCode, 10)}
+                                  className="text-xs text-gray-400 hover:text-[#FF6B35] transition-colors"
+                                >
+                                  10분뮤트
+                                </button>
+                              );
+                            })()}
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
@@ -996,6 +1129,115 @@ export default function AdminPage() {
                   참가자 {(eventConfig.participantWeight * 100).toFixed(0)}%
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* CHAT MONITOR TAB */}
+        {activeTab === "chat" && (
+          <div className="space-y-6">
+            {/* Init Chat Rooms */}
+            <div className="bg-[#1A2235] rounded-xl p-4 border border-[#00FF88]/10 flex items-center justify-between">
+              <div>
+                <h2 className="text-[#00FF88] font-mono font-semibold">채팅방 관리</h2>
+                <p className="text-gray-400 font-mono text-xs mt-1">
+                  전체 채팅 + 팀별 채팅방 ({chatRooms.length}개 존재)
+                </p>
+              </div>
+              <Button
+                onClick={handleInitChatRooms}
+                disabled={submitting}
+                variant="outline"
+                className="font-mono text-xs"
+              >
+                채팅방 초기화
+              </Button>
+            </div>
+
+            {/* Room selector */}
+            <div className="flex gap-2 flex-wrap">
+              {chatRooms
+                .slice()
+                .sort((a, b) => (a.type === "global" ? -1 : b.type === "global" ? 1 : a.name.localeCompare(b.name)))
+                .map((room) => (
+                  <button
+                    key={room.id}
+                    onClick={() => setSelectedChatRoom(room.id)}
+                    className={`px-3 py-1.5 rounded-lg font-mono text-xs border transition-all ${
+                      selectedChatRoom === room.id
+                        ? "bg-[#00FF88]/10 border-[#00FF88] text-[#00FF88]"
+                        : "border-[#1A2235] text-gray-400 hover:border-gray-500 hover:text-white"
+                    }`}
+                  >
+                    {room.name}
+                    <span className="ml-1.5 text-gray-500">({room.messageCount})</span>
+                  </button>
+                ))}
+              {chatRooms.length === 0 && (
+                <span className="text-gray-500 font-mono text-sm">채팅방이 없습니다. 위에서 초기화하세요.</span>
+              )}
+            </div>
+
+            {/* Messages list */}
+            <div className="bg-[#1A2235] rounded-xl border border-[#00FF88]/10 overflow-hidden">
+              <div className="p-4 border-b border-[#00FF88]/10">
+                <h2 className="text-[#00FF88] font-mono font-semibold">
+                  최근 메시지 {chatMessages.length > 0 && `(${chatMessages.length}개)`}
+                </h2>
+              </div>
+              <div className="divide-y divide-[#1A2235]">
+                {chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`p-4 flex items-start justify-between gap-4 ${
+                      msg.deleted ? "opacity-40" : ""
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded font-mono ${
+                            msg.senderRole === "admin"
+                              ? "bg-purple-500/20 text-purple-400"
+                              : msg.senderRole === "judge"
+                              ? "bg-[#FF6B35]/20 text-[#FF6B35]"
+                              : "bg-[#00FF88]/20 text-[#00FF88]"
+                          }`}
+                        >
+                          {msg.senderRole === "admin" ? "관리자" : msg.senderRole === "judge" ? "심사위원" : "참가자"}
+                        </span>
+                        <span className="text-white font-mono text-sm font-semibold">
+                          {msg.senderName}
+                        </span>
+                        <span className="text-gray-500 font-mono text-xs">
+                          {msg.createdAt instanceof Date
+                            ? msg.createdAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                            : ""}
+                        </span>
+                        {msg.deleted && (
+                          <span className="text-red-400 font-mono text-xs">[삭제됨]</span>
+                        )}
+                      </div>
+                      <p className="text-gray-300 font-mono text-sm break-words">
+                        {msg.text}
+                      </p>
+                    </div>
+                    {!msg.deleted && (
+                      <button
+                        onClick={() => handleDeleteMessage(selectedChatRoom, msg.id)}
+                        className="text-xs text-gray-500 hover:text-red-400 transition-colors shrink-0 font-mono"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {chatMessages.length === 0 && (
+                  <div className="text-gray-500 font-mono text-sm text-center py-10">
+                    메시지가 없습니다.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

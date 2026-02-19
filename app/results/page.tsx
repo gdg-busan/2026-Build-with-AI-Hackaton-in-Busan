@@ -10,6 +10,7 @@ import { calculateScores } from "@/lib/scoring";
 import { EVENT_ID } from "@/lib/constants";
 import { ResultReveal } from "@/components/ResultReveal";
 import type { EventConfig, Team, TeamScore } from "@/lib/types";
+import { ChatPanel } from "@/components/chat/ChatPanel";
 
 function getRankLabel(rank: number) {
   if (rank === 1) return "🥇";
@@ -294,6 +295,9 @@ export default function ResultsPage() {
           </button>
         </motion.div>
       </div>
+
+      {/* Chat panel */}
+      <ChatPanel />
     </div>
   );
 }
