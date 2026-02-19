@@ -1,7 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { getFirebaseDb } from "@/lib/firebase";
+import { EVENT_ID } from "@/lib/constants";
 import { motion } from "framer-motion";
-import { ExternalLink, Users, Check, Ban, X } from "lucide-react";
+import { ExternalLink, Users, Check, Ban, X, Github, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +16,14 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import type { Team, MemberProfile } from "@/lib/types";
+import { FeedbackBoard } from "@/components/FeedbackBoard";
+
+interface CheerEntry {
+  id: string;
+  emoji: string;
+  userName: string;
+  createdAt: Date;
+}
 
 interface TeamDetailSheetProps {
   team: Team | null;
@@ -23,6 +35,7 @@ interface TeamDetailSheetProps {
   maxReached: boolean;
   onToggleVote: (teamId: string) => void;
   members?: MemberProfile[];
+  isTeamMember?: boolean;
 }
 
 export function TeamDetailSheet({
@@ -35,10 +48,49 @@ export function TeamDetailSheet({
   maxReached,
   onToggleVote,
   members = [],
+  isTeamMember = false,
 }: TeamDetailSheetProps) {
+  const [cheers, setCheers] = useState<CheerEntry[]>([]);
+
+  // Subscribe to recent cheers
+  useEffect(() => {
+    if (!team) {
+      setCheers([]);
+      return;
+    }
+    const cheersRef = collection(
+      getFirebaseDb(),
+      "events",
+      EVENT_ID,
+      "teams",
+      team.id,
+      "cheers"
+    );
+    const q = query(cheersRef, orderBy("createdAt", "desc"), limit(20));
+    const unsub = onSnapshot(q, (snap) => {
+      setCheers(
+        snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            emoji: data.emoji,
+            userName: data.userName ?? "익명",
+            createdAt: data.createdAt?.toDate?.() ?? new Date(),
+          };
+        })
+      );
+    });
+    return () => unsub();
+  }, [team?.id]);
+
   if (!team) return null;
 
   const voteDisabled = !canVote || isOwnTeam || (!isSelected && maxReached);
+
+  const hasShowcase =
+    team.demoUrl ||
+    team.githubUrl ||
+    (team.techStack && team.techStack.length > 0);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -114,7 +166,7 @@ export function TeamDetailSheet({
                     <div className="w-8 h-8 rounded-full bg-[#4DAFFF]/10 border border-[#4DAFFF]/20 flex items-center justify-center flex-shrink-0">
                       <Users className="w-4 h-4 text-[#4DAFFF]" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="font-mono text-sm font-medium text-foreground">
                         {member.name}
                       </p>
@@ -122,6 +174,18 @@ export function TeamDetailSheet({
                         <p className="text-xs text-muted-foreground mt-0.5 break-words">
                           {member.bio}
                         </p>
+                      )}
+                      {member.techTags && member.techTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {member.techTags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="px-1.5 py-0.5 rounded border border-primary/20 bg-primary/5 font-mono text-[10px] text-primary/80"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -152,6 +216,57 @@ export function TeamDetailSheet({
                   {team.projectUrl}
                 </span>
               </a>
+            </div>
+          )}
+
+          {/* Showcase section */}
+          {hasShowcase && (
+            <div className="space-y-3">
+              <div className="font-mono text-xs text-muted-foreground">
+                <span className="text-primary/60">//</span> showcase
+              </div>
+
+              {/* Tech stack tags */}
+              {team.techStack && team.techStack.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {team.techStack.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-2 py-0.5 rounded border border-[#00FF88]/20 bg-[#00FF88]/5 font-mono text-xs text-[#00FF88]/80"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Quick-link buttons */}
+              <div className="flex flex-wrap gap-2">
+                {team.demoUrl && (
+                  <a
+                    href={team.demoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#FF6B35]/20 bg-[#FF6B35]/5 hover:bg-[#FF6B35]/10 transition-colors group"
+                  >
+                    <Monitor className="w-3.5 h-3.5 text-[#FF6B35]" />
+                    <span className="font-mono text-xs text-[#FF6B35]">Demo</span>
+                    <ExternalLink className="w-3 h-3 text-[#FF6B35]/60" />
+                  </a>
+                )}
+                {team.githubUrl && (
+                  <a
+                    href={team.githubUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/40 bg-background/50 hover:bg-white/5 transition-colors group"
+                  >
+                    <Github className="w-3.5 h-3.5 text-foreground/70" />
+                    <span className="font-mono text-xs text-foreground/70">GitHub</span>
+                    <ExternalLink className="w-3 h-3 text-muted-foreground/50" />
+                  </a>
+                )}
+              </div>
             </div>
           )}
 
@@ -193,6 +308,37 @@ export function TeamDetailSheet({
                 )}
               </Button>
             )}
+          </div>
+
+          {/* Cheers section */}
+          {cheers.length > 0 && (
+            <div className="space-y-3">
+              <div className="font-mono text-xs text-muted-foreground">
+                <span className="text-primary/60">//</span> cheers [{cheers.length}]
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {cheers.map((cheer) => (
+                  <div
+                    key={cheer.id}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-border/50 bg-background/50"
+                    title={`${cheer.userName} · ${cheer.createdAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`}
+                  >
+                    <span className="text-sm">{cheer.emoji}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[60px]">
+                      {cheer.userName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Feedback section */}
+          <div className="space-y-3">
+            <div className="font-mono text-xs text-muted-foreground">
+              <span className="text-primary/60">//</span> feedback
+            </div>
+            <FeedbackBoard teamId={team.id} isTeamMember={isTeamMember} />
           </div>
         </div>
 

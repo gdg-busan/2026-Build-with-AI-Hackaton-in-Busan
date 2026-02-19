@@ -22,6 +22,10 @@ export interface Team {
   memberUserIds: string[];
   judgeVoteCount: number;
   participantVoteCount: number;
+  cheerCount?: number;
+  demoUrl?: string | null;
+  githubUrl?: string | null;
+  techStack?: string[];
 }
 
 export interface User {
@@ -37,6 +41,7 @@ export interface MemberProfile {
   uniqueCode: string;
   name: string;
   bio: string | null;
+  techTags?: string[];
 }
 
 export interface Vote {
@@ -90,4 +95,75 @@ export interface ChatMessage {
 
 export interface RoomReadState {
   lastReadAt: Date;
+}
+
+// Announcement ticker
+export interface Announcement {
+  id: string;
+  text: string;
+  type: "info" | "warning" | "success";
+  createdAt: Date;
+  expiresAt: Date | null;
+  active: boolean;
+}
+
+// Team cheer reactions
+export interface TeamCheer {
+  id: string;
+  teamId: string;
+  emoji: string;
+  userId: string;
+  createdAt: Date;
+}
+
+// Project showcase
+export interface TeamShowcase {
+  demoUrl: string | null;
+  githubUrl: string | null;
+  screenshots: string[];
+  techStack: string[];
+}
+
+// Anonymous feedback
+export interface TeamFeedback {
+  id: string;
+  teamId: string;
+  text: string;
+  type: "cheer" | "question" | "feedback";
+  anonymous: boolean;
+  senderName: string | null;
+  createdAt: Date;
+  reply: string | null;
+  repliedAt: Date | null;
+}
+
+// Missions & badges
+export type MissionId =
+  | "visit_all_teams"
+  | "send_3_feedbacks"
+  | "complete_profile"
+  | "first_vote"
+  | "chat_10_messages"
+  | "cheer_5_teams";
+
+export interface Mission {
+  id: MissionId;
+  title: string;
+  description: string;
+  icon: string;
+  target: number; // 0 means dynamic (resolved at runtime, e.g. team count)
+}
+
+export interface UserMissionProgress {
+  missionId: MissionId;
+  current: number;
+  completed: boolean;
+  completedAt: Date | null;
+  uniqueItems?: string[]; // for unique-tracking missions
+}
+
+// Tech stack tags
+export interface UserTechProfile {
+  tags: string[];
+  updatedAt: Date;
 }

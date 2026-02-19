@@ -1,9 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Ban, Info, Star } from "lucide-react";
+import { Check, Ban, Info, Star, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Team } from "@/lib/types";
+import { CheerButton } from "@/components/CheerButton";
+import { CheerAnimation } from "@/components/CheerAnimation";
 
 interface TeamCardProps {
   team: Team;
@@ -12,6 +14,7 @@ interface TeamCardProps {
   onToggle: (teamId: string) => void;
   onInspect?: (team: Team) => void;
   disabled?: boolean;
+  feedbackCount?: number;
 }
 
 export function TeamCard({
@@ -21,6 +24,7 @@ export function TeamCard({
   onToggle,
   onInspect,
   disabled = false,
+  feedbackCount = 0,
 }: TeamCardProps) {
   const isDisabled = disabled || isOwnTeam;
 
@@ -41,12 +45,15 @@ export function TeamCard({
         disabled && !isOwnTeam && "cursor-not-allowed"
       )}
     >
+      {/* Cheer animation overlay */}
+      <CheerAnimation teamId={team.id} />
+
       {/* Selection indicator */}
       {isSelected && (
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="absolute -top-2 -right-2 w-7 h-7 bg-primary rounded-full flex items-center justify-center shadow-lg"
+          className="absolute -top-2 -right-2 z-10 w-7 h-7 bg-primary rounded-full flex items-center justify-center shadow-lg"
         >
           <Check className="w-4 h-4 text-primary-foreground" />
         </motion.div>
@@ -54,7 +61,7 @@ export function TeamCard({
 
       {/* Own team indicator */}
       {isOwnTeam && !isSelected && (
-        <div className="absolute -top-2 -right-2 px-2 h-6 bg-[#4DAFFF] rounded-full flex items-center justify-center gap-1 shadow-lg shadow-[#4DAFFF]/20">
+        <div className="absolute -top-2 -right-2 z-10 px-2 h-6 bg-[#4DAFFF] rounded-full flex items-center justify-center gap-1 shadow-lg shadow-[#4DAFFF]/20">
           <Star className="w-3 h-3 text-white fill-white" />
           <span className="font-mono text-[10px] font-bold text-white">MY TEAM</span>
         </div>
@@ -97,17 +104,28 @@ export function TeamCard({
         {team.description}
       </p>
 
-      {/* Detail hint */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onInspect?.(team);
-        }}
-        className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-[#4DAFFF] hover:text-[#4DAFFF]/80 transition-colors"
-      >
-        <Info className="w-3 h-3" />
-        상세 보기
-      </button>
+      {/* Detail hint + feedback count */}
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onInspect?.(team);
+          }}
+          className="inline-flex items-center gap-1.5 text-xs font-mono text-[#4DAFFF] hover:text-[#4DAFFF]/80 transition-colors"
+        >
+          <Info className="w-3 h-3" />
+          상세 보기
+        </button>
+        {feedbackCount > 0 && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#00FF88]/20 bg-[#00FF88]/5 font-mono text-[10px] text-[#00FF88]/70">
+            <MessageSquare className="w-2.5 h-2.5" />
+            {feedbackCount}
+          </span>
+        )}
+      </div>
+
+      {/* Cheer buttons */}
+      <CheerButton teamId={team.id} />
 
       {/* Own team label */}
       {isOwnTeam && (

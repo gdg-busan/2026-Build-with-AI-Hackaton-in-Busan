@@ -18,10 +18,11 @@ import { Input } from "@/components/ui/input";
 import { calculateScores, getTop10 } from "@/lib/scoring";
 import { TEAM_EMOJIS, EVENT_ID } from "@/lib/constants";
 import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatRoom } from "@/lib/types";
+import { MISSIONS } from "@/lib/missions";
 import { toast } from "sonner";
 import BatchSetupWizard from "@/components/BatchSetupWizard";
 
-type TabType = "setup" | "event" | "teams" | "users" | "monitor" | "chat";
+type TabType = "setup" | "event" | "teams" | "users" | "monitor" | "chat" | "missions";
 
 const STATUS_COLORS: Record<EventStatus, string> = {
   waiting: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -81,6 +82,23 @@ export default function AdminPage() {
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [chatMessages, setChatMessages] = useState<(ChatMessage & { roomId: string; roomName: string })[]>([]);
   const [selectedChatRoom, setSelectedChatRoom] = useState<string>("global");
+
+  // Mission progress state
+  type MissionUserProgress = {
+    uniqueCode: string;
+    name: string;
+    role: string;
+    teamId: string | null;
+    missions: Array<{
+      missionId: string;
+      current: number;
+      completed: boolean;
+      completedAt: string | null;
+    }>;
+    completedCount: number;
+  };
+  const [missionUsers, setMissionUsers] = useState<MissionUserProgress[]>([]);
+  const [missionLoading, setMissionLoading] = useState(false);
 
   // Loading states
   const [submitting, setSubmitting] = useState(false);
@@ -411,6 +429,25 @@ export default function AdminPage() {
     }
   };
 
+  const handleFetchMissions = useCallback(async () => {
+    setMissionLoading(true);
+    try {
+      const result = await callAdminApi("getMissionProgress", {});
+      setMissionUsers(result.users);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setMissionLoading(false);
+    }
+  }, [callAdminApi]);
+
+  // Auto-fetch missions when switching to missions tab
+  useEffect(() => {
+    if (activeTab === "missions" && missionUsers.length === 0) {
+      handleFetchMissions();
+    }
+  }, [activeTab, missionUsers.length, handleFetchMissions]);
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("클립보드에 복사되었습니다.");
@@ -446,6 +483,7 @@ export default function AdminPage() {
     { key: "users", label: "사용자 & 코드" },
     { key: "monitor", label: "실시간 모니터" },
     { key: "chat", label: "채팅 모니터" },
+    { key: "missions", label: "미션 현황" },
   ];
 
   return (
@@ -1235,6 +1273,187 @@ export default function AdminPage() {
                 {chatMessages.length === 0 && (
                   <div className="text-gray-500 font-mono text-sm text-center py-10">
                     메시지가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MISSIONS TAB */}
+        {activeTab === "missions" && (
+          <div className="space-y-6">
+            {/* Summary */}
+            <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-[#00FF88] font-mono font-semibold">미션 수행 현황</h2>
+                <Button
+                  onClick={handleFetchMissions}
+                  disabled={missionLoading}
+                  variant="outline"
+                  className="font-mono text-xs"
+                >
+                  {missionLoading ? "로딩 중..." : "새로고침"}
+                </Button>
+              </div>
+
+              {/* Mission stats overview */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                {MISSIONS.map((mission) => {
+                  const completedUsers = missionUsers.filter((u) =>
+                    u.missions.some((m) => m.missionId === mission.id && m.completed)
+                  ).length;
+                  return (
+                    <div
+                      key={mission.id}
+                      className="bg-[#0A0E1A]/50 rounded-lg p-3 text-center"
+                    >
+                      <div className="text-2xl mb-1">{mission.icon}</div>
+                      <div className="text-white font-mono text-xs font-semibold">{mission.title}</div>
+                      <div className="text-[#00FF88] font-mono text-lg font-bold mt-1">
+                        {completedUsers}
+                        <span className="text-gray-500 text-xs font-normal">
+                          /{missionUsers.length}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* All-complete leaderboard */}
+              {(() => {
+                const allComplete = missionUsers.filter(
+                  (u) => u.completedCount === MISSIONS.length
+                );
+                if (allComplete.length === 0) return null;
+                return (
+                  <div className="bg-[#00FF88]/5 rounded-lg p-4 border border-[#00FF88]/20">
+                    <h3 className="text-[#00FF88] font-mono text-sm font-semibold mb-2">
+                      🏆 전체 미션 완료 ({allComplete.length}명)
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {allComplete.map((u) => {
+                        const userTeam = teams.find((t) => t.id === u.teamId);
+                        return (
+                          <span
+                            key={u.uniqueCode}
+                            className="px-2 py-1 bg-[#00FF88]/10 text-[#00FF88] rounded font-mono text-xs border border-[#00FF88]/20"
+                          >
+                            {u.name}
+                            {userTeam && (
+                              <span className="text-gray-400 ml-1">
+                                ({userTeam.emoji} {userTeam.nickname || userTeam.name})
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* User-level progress table */}
+            <div className="bg-[#1A2235] rounded-xl border border-[#00FF88]/10 overflow-hidden">
+              <div className="p-4 border-b border-[#00FF88]/10">
+                <h2 className="text-[#00FF88] font-mono font-semibold">
+                  참가자별 미션 진행 ({missionUsers.length}명)
+                </h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm font-mono">
+                  <thead>
+                    <tr className="border-b border-[#00FF88]/10 text-gray-400 text-xs">
+                      <th className="text-left p-3">이름</th>
+                      <th className="text-left p-3">역할</th>
+                      <th className="text-left p-3">팀</th>
+                      {MISSIONS.map((m) => (
+                        <th key={m.id} className="text-center p-3" title={m.description}>
+                          {m.icon}
+                        </th>
+                      ))}
+                      <th className="text-center p-3">완료</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missionUsers.map((u) => {
+                      const userTeam = teams.find((t) => t.id === u.teamId);
+                      return (
+                        <tr
+                          key={u.uniqueCode}
+                          className={`border-b border-[#1A2235] hover:bg-[#0A0E1A]/50 transition-colors ${
+                            u.completedCount === MISSIONS.length ? "bg-[#00FF88]/5" : ""
+                          }`}
+                        >
+                          <td className="p-3 text-white">{u.name}</td>
+                          <td className="p-3">
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full ${
+                                u.role === "judge"
+                                  ? "bg-[#FF6B35]/20 text-[#FF6B35]"
+                                  : "bg-[#00FF88]/20 text-[#00FF88]"
+                              }`}
+                            >
+                              {u.role === "judge" ? "심사위원" : "참가자"}
+                            </span>
+                          </td>
+                          <td className="p-3 text-gray-400 text-xs">
+                            {userTeam
+                              ? `${userTeam.emoji} ${userTeam.nickname || userTeam.name}`
+                              : "미배정"}
+                          </td>
+                          {MISSIONS.map((mission) => {
+                            const progress = u.missions.find(
+                              (m) => m.missionId === mission.id
+                            );
+                            const current = progress?.current ?? 0;
+                            const completed = progress?.completed ?? false;
+                            const resolvedTarget = mission.target > 0 ? mission.target : teams.length;
+                            return (
+                              <td key={mission.id} className="text-center p-3">
+                                {completed ? (
+                                  <span className="text-[#00FF88]" title="완료">✓</span>
+                                ) : current > 0 ? (
+                                  <span
+                                    className="text-yellow-400 text-xs"
+                                    title={`${current}/${resolvedTarget}`}
+                                  >
+                                    {current}/{resolvedTarget}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-600">-</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                          <td className="text-center p-3">
+                            <span
+                              className={`font-bold ${
+                                u.completedCount === MISSIONS.length
+                                  ? "text-[#00FF88]"
+                                  : u.completedCount > 0
+                                  ? "text-yellow-400"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              {u.completedCount}/{MISSIONS.length}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {missionLoading && (
+                  <div className="text-[#00FF88] font-mono text-sm text-center py-10 animate-pulse">
+                    미션 데이터를 불러오는 중...
+                  </div>
+                )}
+                {!missionLoading && missionUsers.length === 0 && (
+                  <div className="text-gray-500 font-mono text-sm text-center py-10">
+                    미션 데이터가 없습니다.
                   </div>
                 )}
               </div>

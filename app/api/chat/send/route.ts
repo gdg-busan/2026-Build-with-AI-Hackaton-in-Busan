@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { EVENT_ID } from "@/lib/constants";
 import type { UserRole } from "@/lib/types";
+import { trackMission } from "@/lib/mission-tracker";
 
 // In-memory rate limiting: uid -> last message timestamp (ms)
 const lastMessageTime = new Map<string, number>();
@@ -159,6 +160,9 @@ export async function POST(req: NextRequest) {
     });
 
     await batch.commit();
+
+    // Track mission progress (fire and forget)
+    trackMission(uid, "chat_10_messages").catch(() => {});
 
     return NextResponse.json({ success: true, messageId: messageRef.id });
   } catch (err) {
