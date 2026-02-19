@@ -55,7 +55,6 @@ events/{eventId}           # status, judgeWeight, participantWeight, maxVotesPer
 | `/vote` | 팀 목록 + 투표 | 필요 (participant/judge) |
 | `/admin` | 이벤트/팀/유저 관리 | 필요 (admin) |
 | `/results` | 결과 공개 (드라마틱 연출) | 필요 |
-| `/display` | 프로젝터용 뷰 | 불필요 |
 
 ## Environment Variables
 

@@ -50,7 +50,6 @@ npx tsx scripts/seed-admin.ts
 | `/vote` | 팀 목록 + 투표 + 팀 상세 보기 | 필요 (participant/judge) |
 | `/admin` | 이벤트/팀/유저 관리 | 필요 (admin) |
 | `/results` | 결과 공개 (드라마틱 연출) | 필요 |
-| `/display` | 프로젝터용 뷰 | 불필요 |
 
 ## Features
 
