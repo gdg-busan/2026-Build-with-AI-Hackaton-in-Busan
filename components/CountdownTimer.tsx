@@ -103,7 +103,7 @@ export function CountdownTimer({ eventConfig }: CountdownTimerProps) {
     );
   }
 
-  if (status === "closed" || status === "revealed") {
+  if (status === "closed") {
     return (
       <div className="flex items-center justify-center gap-2 py-2">
         <span
@@ -111,6 +111,19 @@ export function CountdownTimer({ eventConfig }: CountdownTimerProps) {
           style={{ color: "#FF6B3580" }}
         >
           결과 발표 대기 중
+        </span>
+      </div>
+    );
+  }
+
+  if (status === "revealed") {
+    return (
+      <div className="flex items-center justify-center gap-2 py-2">
+        <span
+          className="font-mono text-sm"
+          style={{ color: "#00FF88", textShadow: "0 0 8px #00FF8860" }}
+        >
+          🏆 결과가 공개되었습니다
         </span>
       </div>
     );

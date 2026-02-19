@@ -17,12 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { calculateScores, getTop10 } from "@/lib/scoring";
 import { TEAM_EMOJIS, EVENT_ID } from "@/lib/constants";
-import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatRoom } from "@/lib/types";
+import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatRoom, Announcement } from "@/lib/types";
 import { MISSIONS } from "@/lib/missions";
 import { toast } from "sonner";
 import BatchSetupWizard from "@/components/BatchSetupWizard";
 
-type TabType = "setup" | "event" | "teams" | "users" | "monitor" | "chat" | "missions";
+type TabType = "setup" | "event" | "teams" | "users" | "monitor" | "chat" | "missions" | "announce";
 
 const STATUS_COLORS: Record<EventStatus, string> = {
   waiting: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -38,19 +38,6 @@ const STATUS_LABELS: Record<EventStatus, string> = {
   revealed: "공개됨",
 };
 
-const STATUS_TRANSITIONS: Record<EventStatus, EventStatus | null> = {
-  waiting: "voting",
-  voting: "closed",
-  closed: "revealed",
-  revealed: null,
-};
-
-const STATUS_TRANSITION_LABELS: Record<EventStatus, string> = {
-  waiting: "투표 시작",
-  voting: "투표 마감",
-  closed: "결과 공개",
-  revealed: "",
-};
 
 export default function AdminPage() {
   const { user, loading, logout } = useAuth();
@@ -99,6 +86,14 @@ export default function AdminPage() {
   };
   const [missionUsers, setMissionUsers] = useState<MissionUserProgress[]>([]);
   const [missionLoading, setMissionLoading] = useState(false);
+
+  // Announcement state
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementForm, setAnnouncementForm] = useState({
+    text: "",
+    type: "info" as "info" | "warning" | "success",
+    expiresMinutes: 60,
+  });
 
   // Loading states
   const [submitting, setSubmitting] = useState(false);
@@ -172,11 +167,35 @@ export default function AdminPage() {
       }
     );
 
+    // Subscribe to announcements
+    const announcementsUnsub = onSnapshot(
+      collection(eventDocRef, "announcements"),
+      (snap) => {
+        setAnnouncements(
+          snap.docs
+            .map((d) => {
+              const data = d.data();
+              return {
+                id: d.id,
+                text: data.text,
+                type: data.type,
+                active: data.active,
+                createdAt: data.createdAt?.toDate?.() ?? new Date(),
+                expiresAt: data.expiresAt?.toDate?.() ?? null,
+              } as Announcement;
+            })
+            .filter((a) => a.active)
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        );
+      }
+    );
+
     return () => {
       eventUnsub();
       teamsUnsub();
       usersUnsub();
       chatRoomsUnsub();
+      announcementsUnsub();
     };
   }, [user]);
 
@@ -301,6 +320,11 @@ export default function AdminPage() {
         name: editingTeam.name,
         description: editingTeam.description,
         emoji: editingTeam.emoji,
+        nickname: editingTeam.nickname,
+        projectUrl: editingTeam.projectUrl,
+        demoUrl: editingTeam.demoUrl,
+        githubUrl: editingTeam.githubUrl,
+        techStack: editingTeam.techStack,
       });
       setEditingTeam(null);
       toast.success("팀이 수정되었습니다.");
@@ -441,6 +465,39 @@ export default function AdminPage() {
     }
   }, [callAdminApi]);
 
+  const handleCreateAnnouncement = async () => {
+    if (!announcementForm.text.trim()) {
+      toast.error("공지 내용을 입력하세요.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const expiresAt = new Date(
+        Date.now() + announcementForm.expiresMinutes * 60 * 1000
+      ).toISOString();
+      await callAdminApi("createAnnouncement", {
+        text: announcementForm.text.trim(),
+        type: announcementForm.type,
+        expiresAt,
+      });
+      setAnnouncementForm({ text: "", type: "info", expiresMinutes: 60 });
+      toast.success("공지가 생성되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (announcementId: string) => {
+    try {
+      await callAdminApi("deleteAnnouncement", { announcementId });
+      toast.success("공지가 삭제되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
   // Auto-fetch missions when switching to missions tab
   useEffect(() => {
     if (activeTab === "missions" && missionUsers.length === 0) {
@@ -484,6 +541,7 @@ export default function AdminPage() {
     { key: "monitor", label: "실시간 모니터" },
     { key: "chat", label: "채팅 모니터" },
     { key: "missions", label: "미션 현황" },
+    { key: "announce", label: "공지 관리" },
   ];
 
   return (
@@ -767,21 +825,92 @@ export default function AdminPage() {
                 >
                   {editingTeam?.id === team.id ? (
                     <div className="space-y-3">
-                      <div className="flex gap-2">
-                        <Input
-                          value={editingTeam.name}
-                          onChange={(e) =>
-                            setEditingTeam((p) => p ? { ...p, name: e.target.value } : null)
-                          }
-                          className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
-                        />
-                        <Input
-                          value={editingTeam.description}
-                          onChange={(e) =>
-                            setEditingTeam((p) => p ? { ...p, description: e.target.value } : null)
-                          }
-                          className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-gray-400 font-mono text-xs block mb-1">팀 이름</label>
+                          <Input
+                            value={editingTeam.name}
+                            onChange={(e) =>
+                              setEditingTeam((p) => p ? { ...p, name: e.target.value } : null)
+                            }
+                            className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-400 font-mono text-xs block mb-1">팀 별칭</label>
+                          <Input
+                            value={editingTeam.nickname ?? ""}
+                            onChange={(e) =>
+                              setEditingTeam((p) => p ? { ...p, nickname: e.target.value } : null)
+                            }
+                            placeholder="별칭 (선택)"
+                            className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="text-gray-400 font-mono text-xs block mb-1">설명</label>
+                          <Input
+                            value={editingTeam.description}
+                            onChange={(e) =>
+                              setEditingTeam((p) => p ? { ...p, description: e.target.value } : null)
+                            }
+                            className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-400 font-mono text-xs block mb-1">프로젝트 URL</label>
+                          <Input
+                            value={editingTeam.projectUrl ?? ""}
+                            onChange={(e) =>
+                              setEditingTeam((p) => p ? { ...p, projectUrl: e.target.value } : null)
+                            }
+                            placeholder="https://"
+                            className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-400 font-mono text-xs block mb-1">데모 URL</label>
+                          <Input
+                            value={editingTeam.demoUrl ?? ""}
+                            onChange={(e) =>
+                              setEditingTeam((p) => p ? { ...p, demoUrl: e.target.value } : null)
+                            }
+                            placeholder="https://"
+                            className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-400 font-mono text-xs block mb-1">GitHub URL</label>
+                          <Input
+                            value={editingTeam.githubUrl ?? ""}
+                            onChange={(e) =>
+                              setEditingTeam((p) => p ? { ...p, githubUrl: e.target.value } : null)
+                            }
+                            placeholder="https://github.com/"
+                            className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-400 font-mono text-xs block mb-1">기술 스택 (쉼표 구분)</label>
+                          <Input
+                            value={Array.isArray(editingTeam.techStack) ? editingTeam.techStack.join(", ") : (editingTeam.techStack ?? "")}
+                            onChange={(e) =>
+                              setEditingTeam((p) =>
+                                p
+                                  ? {
+                                      ...p,
+                                      techStack: e.target.value
+                                        .split(",")
+                                        .map((s) => s.trim())
+                                        .filter(Boolean),
+                                    }
+                                  : null
+                              )
+                            }
+                            placeholder="React, TypeScript, Firebase"
+                            className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                          />
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {TEAM_EMOJIS.map((emoji) => (
@@ -918,7 +1047,6 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {users.map((u) => {
-                      const userTeam = teams.find((t) => t.id === u.teamId);
                       return (
                         <tr
                           key={u.uniqueCode}
@@ -1076,7 +1204,6 @@ export default function AdminPage() {
                   )
                   .map((team) => {
                     const total = team.judgeVoteCount + team.participantVoteCount;
-                    const pct = maxVotes > 0 ? (total / maxVotes) * 100 : 0;
                     return (
                       <div key={team.id}>
                         <div className="flex items-center justify-between mb-1">
@@ -1457,6 +1584,144 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ANNOUNCE TAB */}
+        {activeTab === "announce" && (
+          <div className="space-y-6">
+            {/* Create Announcement Form */}
+            <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
+              <h2 className="text-[#00FF88] font-mono font-semibold mb-4">새 공지 생성</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-gray-400 font-mono text-xs block mb-1">공지 내용 (최대 200자)</label>
+                  <Input
+                    value={announcementForm.text}
+                    onChange={(e) =>
+                      setAnnouncementForm((p) => ({ ...p, text: e.target.value }))
+                    }
+                    placeholder="공지 내용을 입력하세요..."
+                    maxLength={200}
+                    className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                  />
+                  <div className="text-gray-600 font-mono text-xs mt-1 text-right">
+                    {announcementForm.text.length}/200
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">공지 유형</label>
+                    <select
+                      value={announcementForm.type}
+                      onChange={(e) =>
+                        setAnnouncementForm((p) => ({
+                          ...p,
+                          type: e.target.value as "info" | "warning" | "success",
+                        }))
+                      }
+                      className="h-10 w-full px-3 rounded-lg bg-[#0A0E1A] border border-[#00FF88]/20 text-white font-mono text-sm"
+                    >
+                      <option value="info">정보 (info)</option>
+                      <option value="warning">경고 (warning)</option>
+                      <option value="success">성공 (success)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">만료 시간 (분)</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="1440"
+                      value={announcementForm.expiresMinutes}
+                      onChange={(e) =>
+                        setAnnouncementForm((p) => ({
+                          ...p,
+                          expiresMinutes: parseInt(e.target.value) || 60,
+                        }))
+                      }
+                      className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                    />
+                  </div>
+                </div>
+                <Button
+                  onClick={handleCreateAnnouncement}
+                  disabled={submitting || !announcementForm.text.trim()}
+                  className="font-mono bg-[#00FF88] text-[#0A0E1A] hover:bg-[#00FF88]/90"
+                >
+                  {submitting ? "생성 중..." : "공지 생성"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Active Announcements List */}
+            <div className="bg-[#1A2235] rounded-xl border border-[#00FF88]/10 overflow-hidden">
+              <div className="p-4 border-b border-[#00FF88]/10">
+                <h2 className="text-[#00FF88] font-mono font-semibold">
+                  활성 공지 ({announcements.length}개)
+                </h2>
+              </div>
+              {announcements.length === 0 ? (
+                <div className="text-gray-500 font-mono text-sm text-center py-10">
+                  활성 공지가 없습니다.
+                </div>
+              ) : (
+                <div className="divide-y divide-[#0A0E1A]">
+                  {announcements.map((ann) => (
+                    <div
+                      key={ann.id}
+                      className="p-4 flex items-start justify-between gap-4"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded border font-mono ${
+                              ann.type === "success"
+                                ? "bg-[#00FF88]/10 text-[#00FF88] border-[#00FF88]/30"
+                                : ann.type === "warning"
+                                ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+                                : "bg-[#4DAFFF]/10 text-[#4DAFFF] border-[#4DAFFF]/30"
+                            }`}
+                          >
+                            {ann.type === "success" ? "성공" : ann.type === "warning" ? "경고" : "정보"}
+                          </span>
+                          <span className="text-gray-500 font-mono text-xs">
+                            {ann.createdAt instanceof Date
+                              ? ann.createdAt.toLocaleString("ko-KR", {
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : ""}
+                          </span>
+                          {ann.expiresAt && (
+                            <span className="text-gray-600 font-mono text-xs">
+                              만료:{" "}
+                              {ann.expiresAt instanceof Date
+                                ? ann.expiresAt.toLocaleString("ko-KR", {
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : ""}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-white font-mono text-sm break-words">{ann.text}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteAnnouncement(ann.id)}
+                        className="text-xs text-gray-500 hover:text-red-400 transition-colors shrink-0 font-mono"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

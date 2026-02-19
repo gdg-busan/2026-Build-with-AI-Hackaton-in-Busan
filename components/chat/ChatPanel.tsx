@@ -50,7 +50,7 @@ export function ChatPanel() {
   const teamRoomId = user?.teamId || null;
   const currentRoomId = activeTab === "global" ? globalRoomId : teamRoomId;
 
-  const { messages, loading, hasMore, loadMore } = useChatRoom(
+  const { messages, loading, hasMore, loadMore, error } = useChatRoom(
     roomsReady ? currentRoomId : null
   );
 
@@ -197,6 +197,13 @@ export function ChatPanel() {
 
           {/* Messages area */}
           <div className="flex-1 flex flex-col min-h-0 relative z-20">
+            {error && (
+              <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/20 flex-shrink-0">
+                <p className="font-mono text-xs text-red-400">
+                  {">"} {error}
+                </p>
+              </div>
+            )}
             <MessageList
               messages={messages}
               currentUserId={user.uid}

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Ban, Info, Star, MessageSquare } from "lucide-react";
+import { Check, Info, Star, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Team } from "@/lib/types";
 import { CheerButton } from "@/components/CheerButton";
@@ -130,7 +130,7 @@ export function TeamCard({
       {/* Own team label */}
       {isOwnTeam && (
         <div className="mt-2 text-xs font-mono text-[#4DAFFF]">
-          // 내 팀 — 다른 팀에 투표해주세요
+          {"// 내 팀 — 다른 팀에 투표해주세요"}
         </div>
       )}
     </motion.div>

@@ -88,7 +88,7 @@ export function AnnouncementTicker() {
                 {announcements.map((a, i) => (
                   <span key={a.id}>
                     {i > 0 && (
-                      <span className="opacity-40 mx-3">///</span>
+                      <span className="opacity-40 mx-3">{"///"}</span>
                     )}
                     <span
                       style={{

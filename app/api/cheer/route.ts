@@ -6,9 +6,6 @@ import { trackUniqueMission } from "@/lib/mission-tracker";
 
 const ALLOWED_EMOJIS = ["🔥", "❤️", "👏", "🎉", "⭐", "💪", "🚀", "👍"];
 
-// In-memory rate limit: uid -> last cheer timestamp
-const rateLimitMap = new Map<string, number>();
-const RATE_LIMIT_MS = 3000;
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,16 +33,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Rate limit check
-    const now = Date.now();
-    const lastCheer = rateLimitMap.get(uid) ?? 0;
-    if (now - lastCheer < RATE_LIMIT_MS) {
-      return NextResponse.json(
-        { error: "너무 빠릅니다. 잠시 후 다시 시도해주세요" },
-        { status: 429 }
-      );
+    // Firestore-based rate limiting (3s between cheers)
+    const userRef = adminDb.doc(`events/${EVENT_ID}/users/${uid}`);
+    const userSnap = await userRef.get();
+    if (userSnap.exists) {
+      const userData = userSnap.data()!;
+      const lastCheerAt = userData.lastCheerAt?.toDate?.() ?? null;
+      if (lastCheerAt && Date.now() - lastCheerAt.getTime() < 3000) {
+        return NextResponse.json(
+          { error: "너무 빠릅니다. 잠시 후 다시 시도해주세요" },
+          { status: 429 }
+        );
+      }
     }
-    rateLimitMap.set(uid, now);
 
     // Parse request body
     const body = await req.json();
@@ -92,6 +92,9 @@ export async function POST(req: NextRequest) {
     batch.update(teamRef, {
       cheerCount: FieldValue.increment(1),
     });
+
+    // Update rate limit timestamp
+    batch.update(userRef, { lastCheerAt: FieldValue.serverTimestamp() });
 
     await batch.commit();
 
