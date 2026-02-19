@@ -11,6 +11,8 @@ import { EVENT_ID } from "@/lib/constants";
 import { ResultReveal } from "@/components/ResultReveal";
 import type { EventConfig, Team, TeamScore } from "@/lib/types";
 import { ChatPanel } from "@/components/chat/ChatPanel";
+import { AnnouncementTicker } from "@/components/AnnouncementTicker";
+import { MissionPanel } from "@/components/MissionPanel";
 
 function getRankLabel(rank: number) {
   if (rank === 1) return "🥇";
@@ -170,8 +172,9 @@ export default function ResultsPage() {
   const maxScore = allScores[0]?.finalScore || 100;
 
   return (
-    <div className="min-h-screen bg-[#0A0E1A] dot-grid py-10 px-4">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-[#0A0E1A] dot-grid">
+      <AnnouncementTicker />
+      <div className="max-w-3xl mx-auto py-10 px-4">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -298,6 +301,9 @@ export default function ResultsPage() {
 
       {/* Chat panel */}
       <ChatPanel />
+
+      {/* Mission panel */}
+      <MissionPanel />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { EVENT_ID } from "@/lib/constants";
 import type { UserRole } from "@/lib/types";
+import { checkProfileComplete } from "@/lib/mission-tracker";
 
 export async function PUT(req: NextRequest) {
   try {
@@ -39,7 +40,11 @@ export async function PUT(req: NextRequest) {
     const uniqueCode: string = decodedToken.uid;
 
     const body = await req.json();
-    const { name, bio }: { name?: string; bio?: string | null } = body;
+    const {
+      name,
+      bio,
+      techTags,
+    }: { name?: string; bio?: string | null; techTags?: string[] } = body;
 
     if (name !== undefined) {
       if (typeof name !== "string" || name.trim().length === 0) {
@@ -81,9 +86,33 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const updates: Record<string, string | null> = {};
+    if (techTags !== undefined) {
+      if (!Array.isArray(techTags)) {
+        return NextResponse.json(
+          { error: "기술 태그 형식이 올바르지 않습니다" },
+          { status: 400 }
+        );
+      }
+      if (techTags.length > 5) {
+        return NextResponse.json(
+          { error: "기술 태그는 최대 5개까지 선택할 수 있습니다" },
+          { status: 400 }
+        );
+      }
+      for (const tag of techTags) {
+        if (typeof tag !== "string" || tag.length > 20) {
+          return NextResponse.json(
+            { error: "기술 태그 값이 올바르지 않습니다" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    const updates: Record<string, string | string[] | null> = {};
     if (name !== undefined) updates.name = name.trim();
     if (bio !== undefined) updates.bio = bio ? bio.trim() : null;
+    if (techTags !== undefined) updates.techTags = techTags;
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
@@ -93,6 +122,9 @@ export async function PUT(req: NextRequest) {
     }
 
     await userRef.update(updates);
+
+    // Check if profile is now complete for mission tracking
+    checkProfileComplete(uniqueCode).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getFirebaseAuth } from "@/lib/firebase";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { EVENT_ID } from "@/lib/constants";
+import { useAuth } from "@/lib/auth-context";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +14,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { TechTagInput } from "@/components/TechTagInput";
 
 interface MemberProfileDialogProps {
   open: boolean;
@@ -25,16 +29,28 @@ export function MemberProfileDialog({
   currentName,
   currentBio,
 }: MemberProfileDialogProps) {
+  const { user } = useAuth();
   const [name, setName] = useState(currentName);
   const [bio, setBio] = useState(currentBio ?? "");
+  const [techTags, setTechTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
       setName(currentName);
       setBio(currentBio ?? "");
+      // Load existing techTags from Firestore
+      if (user?.uniqueCode) {
+        getDoc(
+          doc(getFirebaseDb(), "events", EVENT_ID, "users", user.uniqueCode)
+        ).then((snap) => {
+          if (snap.exists()) {
+            setTechTags(snap.data().techTags ?? []);
+          }
+        });
+      }
     }
-  }, [open, currentName, currentBio]);
+  }, [open, currentName, currentBio, user?.uniqueCode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +65,11 @@ export function MemberProfileDialog({
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: name.trim(), bio: bio.trim() || null }),
+        body: JSON.stringify({
+          name: name.trim(),
+          bio: bio.trim() || null,
+          techTags,
+        }),
       });
 
       const data = await res.json();
@@ -119,6 +139,18 @@ export function MemberProfileDialog({
             <p className="text-xs text-muted-foreground/60 text-right">
               {bio.length}/100
             </p>
+          </div>
+
+          {/* Tech Tags */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-mono text-muted-foreground">
+              기술 태그 (최대 5개)
+            </label>
+            <TechTagInput
+              selectedTags={techTags}
+              onChange={setTechTags}
+              maxTags={5}
+            />
           </div>
 
           {/* Actions */}

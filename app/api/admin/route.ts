@@ -9,6 +9,7 @@ const teamsCol = () => eventRef().collection("teams");
 const usersCol = () => eventRef().collection("users");
 const votesCol = () => eventRef().collection("votes");
 const chatRoomsCol = () => eventRef().collection("chatRooms");
+const announcementsCol = () => eventRef().collection("announcements");
 
 async function verifyAdmin(request: NextRequest) {
   const authorization = request.headers.get("Authorization");
@@ -479,6 +480,93 @@ export async function POST(request: NextRequest) {
         const { userCode } = data as { userCode: string };
         await usersCol().doc(userCode).update({ chatMutedUntil: null });
         return NextResponse.json({ success: true });
+      }
+
+      case "createAnnouncement": {
+        const { text, type: annType, expiresAt } = data as {
+          text: string;
+          type: string;
+          expiresAt?: string | null;
+        };
+        if (!text || text.length < 1 || text.length > 200) {
+          return NextResponse.json(
+            { error: "text must be 1-200 characters" },
+            { status: 400 }
+          );
+        }
+        if (!["info", "warning", "success"].includes(annType)) {
+          return NextResponse.json(
+            { error: "type must be info, warning, or success" },
+            { status: 400 }
+          );
+        }
+        const annRef = announcementsCol().doc();
+        await annRef.set({
+          text,
+          type: annType,
+          active: true,
+          createdAt: FieldValue.serverTimestamp(),
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+        });
+        return NextResponse.json({ success: true, announcementId: annRef.id });
+      }
+
+      case "deleteAnnouncement": {
+        const { announcementId } = data as { announcementId: string };
+        await announcementsCol().doc(announcementId).update({ active: false });
+        return NextResponse.json({ success: true });
+      }
+
+      case "getMissionProgress": {
+        // Fetch all users with their mission progress
+        const allUsersSnap = await usersCol().get();
+        const results: Array<{
+          uniqueCode: string;
+          name: string;
+          role: string;
+          teamId: string | null;
+          missions: Array<{
+            missionId: string;
+            current: number;
+            completed: boolean;
+            completedAt: string | null;
+          }>;
+          completedCount: number;
+        }> = [];
+
+        for (const userDoc of allUsersSnap.docs) {
+          const userData = userDoc.data();
+          if (userData.role === "admin") continue; // skip admins
+
+          const missionsSnap = await usersCol()
+            .doc(userDoc.id)
+            .collection("missions")
+            .get();
+
+          const missions = missionsSnap.docs.map((d) => {
+            const md = d.data();
+            return {
+              missionId: d.id,
+              current: md.current ?? 0,
+              completed: md.completed ?? false,
+              completedAt: md.completedAt?.toDate()?.toISOString() ?? null,
+            };
+          });
+
+          results.push({
+            uniqueCode: userDoc.id,
+            name: userData.name ?? userDoc.id,
+            role: userData.role,
+            teamId: userData.teamId ?? null,
+            missions,
+            completedCount: missions.filter((m) => m.completed).length,
+          });
+        }
+
+        // Sort by completedCount descending
+        results.sort((a, b) => b.completedCount - a.completedCount);
+
+        return NextResponse.json({ success: true, users: results });
       }
 
       default:

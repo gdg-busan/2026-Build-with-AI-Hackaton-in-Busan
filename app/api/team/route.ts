@@ -57,8 +57,17 @@ export async function PUT(req: NextRequest) {
       nickname,
       description,
       projectUrl,
-    }: { nickname?: string | null; description?: string; projectUrl?: string | null } =
-      body;
+      demoUrl,
+      githubUrl,
+      techStack,
+    }: {
+      nickname?: string | null;
+      description?: string;
+      projectUrl?: string | null;
+      demoUrl?: string | null;
+      githubUrl?: string | null;
+      techStack?: string[];
+    } = body;
 
     // Validate nickname if provided
     if (nickname !== undefined && nickname !== null) {
@@ -76,6 +85,22 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    // Helper to validate URL fields
+    const validateUrl = (url: string | null | undefined, fieldName: string) => {
+      if (url !== undefined && url !== null && url !== "") {
+        if (
+          typeof url !== "string" ||
+          (!url.startsWith("http://") && !url.startsWith("https://"))
+        ) {
+          return NextResponse.json(
+            { error: `${fieldName}은 http:// 또는 https://로 시작해야 합니다` },
+            { status: 400 }
+          );
+        }
+      }
+      return null;
+    };
+
     // Validate projectUrl if provided
     if (projectUrl !== undefined && projectUrl !== null) {
       if (
@@ -85,6 +110,21 @@ export async function PUT(req: NextRequest) {
       ) {
         return NextResponse.json(
           { error: "프로젝트 URL은 http:// 또는 https://로 시작해야 합니다" },
+          { status: 400 }
+        );
+      }
+    }
+
+    const demoUrlError = validateUrl(demoUrl, "데모 URL");
+    if (demoUrlError) return demoUrlError;
+    const githubUrlError = validateUrl(githubUrl, "GitHub URL");
+    if (githubUrlError) return githubUrlError;
+
+    // Validate techStack
+    if (techStack !== undefined) {
+      if (!Array.isArray(techStack) || techStack.some((t) => typeof t !== "string" || t.length > 30)) {
+        return NextResponse.json(
+          { error: "기술 스택 형식이 올바르지 않습니다" },
           { status: 400 }
         );
       }
@@ -112,10 +152,13 @@ export async function PUT(req: NextRequest) {
     }
 
     // Build update object with only provided fields
-    const updates: Record<string, string | null> = {};
+    const updates: Record<string, string | string[] | null> = {};
     if (nickname !== undefined) updates.nickname = nickname ? nickname.trim() : null;
     if (description !== undefined) updates.description = description;
     if (projectUrl !== undefined) updates.projectUrl = projectUrl;
+    if (demoUrl !== undefined) updates.demoUrl = demoUrl || null;
+    if (githubUrl !== undefined) updates.githubUrl = githubUrl || null;
+    if (techStack !== undefined) updates.techStack = techStack;
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(

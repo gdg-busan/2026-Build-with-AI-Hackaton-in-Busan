@@ -15,6 +15,7 @@ import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { EVENT_ID } from "@/lib/constants";
 import type { Team, EventConfig, MemberProfile } from "@/lib/types";
+import { useMissions } from "@/hooks/useMissions";
 import { TeamCard } from "@/components/TeamCard";
 import { TeamDetailSheet } from "@/components/TeamDetailSheet";
 import { VotingProgress } from "@/components/VotingProgress";
@@ -27,10 +28,14 @@ import Link from "next/link";
 import { TeamEditDialog } from "@/components/TeamEditDialog";
 import { MemberProfileDialog } from "@/components/MemberProfileDialog";
 import { ChatPanel } from "@/components/chat/ChatPanel";
+import { MissionPanel } from "@/components/MissionPanel";
+import { AnnouncementTicker } from "@/components/AnnouncementTicker";
+import { CountdownTimer } from "@/components/CountdownTimer";
 
 export default function VotePage() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
+  const { updateProgress, updateUniqueProgress } = useMissions(user?.uniqueCode);
 
   const [eventConfig, setEventConfig] = useState<EventConfig | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -97,6 +102,10 @@ export default function VotePage() {
           memberUserIds: d.data().memberUserIds ?? [],
           judgeVoteCount: d.data().judgeVoteCount ?? 0,
           participantVoteCount: d.data().participantVoteCount ?? 0,
+          cheerCount: d.data().cheerCount ?? 0,
+          demoUrl: d.data().demoUrl ?? null,
+          githubUrl: d.data().githubUrl ?? null,
+          techStack: d.data().techStack ?? [],
         }));
         setTeams(t);
       }
@@ -169,10 +178,19 @@ export default function VotePage() {
         uniqueCode: d.id,
         name: d.data().name ?? d.id,
         bio: d.data().bio ?? null,
+        techTags: d.data().techTags ?? [],
       }));
       setInspectMembers(members);
     });
   }, [inspectTeam]);
+
+  const handleInspect = useCallback(
+    (team: Team) => {
+      setInspectTeam(team);
+      updateUniqueProgress("visit_all_teams", team.id, teams.length);
+    },
+    [updateUniqueProgress, teams.length]
+  );
 
   const handleToggle = useCallback(
     (teamId: string) => {
@@ -213,6 +231,7 @@ export default function VotePage() {
       setConfirmOpen(false);
       setVoteSuccess(true);
       toast.success("투표가 완료되었습니다!");
+      updateProgress("first_vote", 1);
 
       // Trigger confetti
       const confetti = (await import("canvas-confetti")).default;
@@ -320,7 +339,12 @@ export default function VotePage() {
         </div>
       </header>
 
+      <AnnouncementTicker />
+
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+        {/* Countdown timer */}
+        {eventConfig && <CountdownTimer eventConfig={eventConfig} />}
+
         {/* Status banner for non-voting states */}
         {eventConfig && !isVotingActive && !voteSuccess && (
           <div className="rounded-xl border border-border bg-card p-8 text-center space-y-3">
@@ -393,7 +417,7 @@ export default function VotePage() {
                   isSelected={isVotingActive && selectedTeams.includes(team.id)}
                   isOwnTeam={user.teamId === team.id}
                   onToggle={isVotingActive ? handleToggle : () => {}}
-                  onInspect={setInspectTeam}
+                  onInspect={handleInspect}
                   disabled={
                     !isVotingActive ||
                     voteSuccess ||
@@ -451,6 +475,7 @@ export default function VotePage() {
         maxReached={selectedTeams.length >= maxVotes}
         onToggleVote={handleToggle}
         members={inspectMembers}
+        isTeamMember={inspectTeam ? user.teamId === inspectTeam.id : false}
       />
 
       {/* Member profile dialog */}
@@ -472,6 +497,9 @@ export default function VotePage() {
 
       {/* Chat panel */}
       {eventConfig && <ChatPanel />}
+
+      {/* Mission panel */}
+      {eventConfig && <MissionPanel />}
     </div>
   );
 }
