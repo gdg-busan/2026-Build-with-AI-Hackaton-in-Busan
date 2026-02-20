@@ -22,6 +22,12 @@ description: API 라우트 보안 패턴 검증. API 라우트 추가/수정 후
 | `app/api/auth/route.ts` | 코드 인증 → Custom Token 발급 (공개 엔드포인트) |
 | `app/api/vote/route.ts` | 투표 제출 (인증 필요, 부정 방지) |
 | `app/api/admin/route.ts` | 관리자 CRUD 작업 (admin role 필요) |
+| `app/api/team/route.ts` | 팀 정보 조회/수정 (인증 필요) |
+| `app/api/user/route.ts` | 사용자 프로필 조회/수정 (인증 필요) |
+| `app/api/cheer/route.ts` | 팀 응원 리액션 (인증 필요) |
+| `app/api/feedback/route.ts` | 익명 피드백 제출/조회 (인증 필요) |
+| `app/api/chat/rooms/route.ts` | 채팅방 목록 조회 (인증 필요) |
+| `app/api/chat/send/route.ts` | 채팅 메시지 전송 (인증 필요) |
 | `firebase/firestore.rules` | Firestore 보안 규칙 |
 | `lib/firebase-admin.ts` | Admin SDK (verifyIdToken, adminDb) |
 
@@ -29,13 +35,13 @@ description: API 라우트 보안 패턴 검증. API 라우트 추가/수정 후
 
 ### Step 1: 보호된 API에 토큰 검증 존재 확인
 
-**검사:** `/api/vote`와 `/api/admin` 라우트에 `verifyIdToken` 호출이 있어야 함.
+**검사:** 모든 보호된 API 라우트에 `verifyIdToken` 호출이 있어야 함.
 
 ```bash
-grep -n "verifyIdToken" app/api/vote/route.ts app/api/admin/route.ts
+grep -rn "verifyIdToken" app/api/vote/route.ts app/api/admin/route.ts app/api/team/route.ts app/api/user/route.ts app/api/cheer/route.ts app/api/feedback/route.ts app/api/chat/rooms/route.ts app/api/chat/send/route.ts
 ```
 
-**PASS:** 두 파일 모두에서 `verifyIdToken` 호출이 발견됨.
+**PASS:** 모든 보호된 API 파일에서 `verifyIdToken` 호출이 발견됨.
 **FAIL:** 어느 한 파일에서 `verifyIdToken`이 누락됨 → 토큰 검증 추가 필요.
 
 ### Step 2: Admin API role 체크 확인
@@ -65,10 +71,10 @@ grep -n "teamId\|own.*team\|self.*vote\|자기.*팀" app/api/vote/route.ts
 **검사:** 보호된 API들이 동일한 패턴으로 Bearer 토큰을 추출해야 함.
 
 ```bash
-grep -n "Bearer\|Authorization" app/api/vote/route.ts app/api/admin/route.ts
+grep -rn "Bearer\|Authorization" app/api/vote/route.ts app/api/admin/route.ts app/api/team/route.ts app/api/user/route.ts app/api/cheer/route.ts app/api/feedback/route.ts app/api/chat/rooms/route.ts app/api/chat/send/route.ts
 ```
 
-**PASS:** 두 파일 모두 `Authorization: Bearer <token>` 패턴 사용.
+**PASS:** 모든 파일이 `Authorization: Bearer <token>` 패턴 사용.
 **FAIL:** 불일치하는 토큰 추출 패턴.
 
 ### Step 5: Firestore Rules에 votes 보호 확인

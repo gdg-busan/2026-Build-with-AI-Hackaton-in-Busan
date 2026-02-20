@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   collection,
@@ -21,6 +21,7 @@ import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatR
 import { MISSIONS } from "@/lib/missions";
 import { toast } from "sonner";
 import BatchSetupWizard from "@/components/BatchSetupWizard";
+import { useVotingTimer } from "@/hooks/useVotingTimer";
 
 type TabType = "setup" | "event" | "teams" | "users" | "monitor" | "chat" | "missions" | "announce";
 
@@ -97,6 +98,10 @@ export default function AdminPage() {
 
   // Loading states
   const [submitting, setSubmitting] = useState(false);
+  const [customMinutes, setCustomMinutes] = useState(10);
+  const [targetTime, setTargetTime] = useState("");
+  const timer = useVotingTimer(eventConfig);
+  const autoCloseTriggeredRef = useRef(false);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "admin")) {
@@ -122,6 +127,8 @@ export default function AdminPage() {
           votingDeadline: d.votingDeadline?.toDate?.() || null,
           title: d.title || "",
           createdAt: d.createdAt?.toDate?.() || new Date(),
+          autoCloseEnabled: d.autoCloseEnabled ?? false,
+          timerDurationSec: d.timerDurationSec ?? null,
         });
         setConfigForm({
           judgeWeight: d.judgeWeight,
@@ -263,6 +270,36 @@ export default function AdminPage() {
     },
     [getIdToken]
   );
+
+  // Auto-advance: when timer expires and autoCloseEnabled, advance to next status
+  const nextStatusMap: Partial<Record<EventStatus, { status: EventStatus; message: string }>> = {
+    waiting: { status: "voting", message: "타이머 만료로 투표가 시작되었습니다." },
+    voting: { status: "closed", message: "타이머 만료로 투표가 자동 마감되었습니다." },
+  };
+
+  useEffect(() => {
+    if (
+      timer.isExpired &&
+      eventConfig?.autoCloseEnabled &&
+      eventConfig?.status &&
+      nextStatusMap[eventConfig.status] &&
+      !autoCloseTriggeredRef.current
+    ) {
+      const next = nextStatusMap[eventConfig.status]!;
+      const currentStatus = eventConfig.status;
+      autoCloseTriggeredRef.current = true;
+      callAdminApi("updateEventStatus", { status: next.status })
+        .then(async () => {
+          toast.success(next.message);
+          // waiting → voting 전환 시 타이머 리셋 (연쇄 전환 방지)
+          if (currentStatus === "waiting") {
+            await callAdminApi("resetTimer", {});
+          }
+        })
+        .catch((e: Error) => toast.error(`자동 전환 실패: ${e.message}`))
+        .finally(() => { autoCloseTriggeredRef.current = false; });
+    }
+  }, [timer.isExpired, eventConfig?.autoCloseEnabled, eventConfig?.status, callAdminApi]);
 
   const handleStatusChange = async (newStatus: EventStatus) => {
     if (!eventConfig || eventConfig.status === newStatus) return;
@@ -653,6 +690,249 @@ export default function AdminPage() {
                   </Button>
                 </div>
               )}
+            </div>
+
+            {/* Timer Control Card */}
+            <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
+              <h2 className="text-[#00FF88] font-mono font-semibold mb-4">타이머 관리</h2>
+
+              {/* Current timer status */}
+              {eventConfig && (
+                <div className="mb-4 p-3 rounded-lg bg-[#0A0E1A]/50">
+                  {timer.isActive && eventConfig.votingDeadline ? (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-xs uppercase tracking-widest" style={{ color: "#00FF8880" }}>
+                          남은 시간
+                        </span>
+                        <span
+                          className="font-mono text-2xl font-bold tabular-nums"
+                          style={{
+                            color: timer.urgency === "critical" ? "#FF6B35" : timer.urgency === "warning" ? "#FF6B35" : "#00FF88",
+                            textShadow: timer.urgency !== "normal" ? "0 0 12px #FF6B3580" : "0 0 12px #00FF8880",
+                            animation: timer.urgency === "critical" ? "pulse 1s ease-in-out infinite" : undefined,
+                          }}
+                        >
+                          {timer.formattedTime}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-0.5 rounded border font-mono ${
+                          eventConfig.autoCloseEnabled
+                            ? "bg-[#00FF88]/10 text-[#00FF88] border-[#00FF88]/30"
+                            : "bg-gray-500/10 text-gray-400 border-gray-500/30"
+                        }`}>
+                          자동 마감: {eventConfig.autoCloseEnabled ? "ON" : "OFF"}
+                        </span>
+                      </div>
+                    </div>
+                  ) : timer.isExpired ? (
+                    <div className="text-center">
+                      <span className="font-mono text-sm" style={{ color: "#FF6B35" }}>
+                        타이머 만료됨
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <span className="font-mono text-sm text-gray-500">
+                        타이머가 설정되지 않았습니다
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Preset buttons */}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-gray-400 font-mono text-xs block mb-2">프리셋</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[5, 10, 15, 30].map((min) => (
+                      <Button
+                        key={min}
+                        variant="outline"
+                        size="sm"
+                        disabled={submitting}
+                        onClick={async () => {
+                          setSubmitting(true);
+                          try {
+                            await callAdminApi("setTimer", { durationSec: min * 60, autoCloseEnabled: eventConfig?.autoCloseEnabled ?? false });
+                            toast.success(`${min}분 타이머가 설정되었습니다.`);
+                          } catch (e) { toast.error((e as Error).message); }
+                          finally { setSubmitting(false); }
+                        }}
+                        className="font-mono text-xs border-[#4DAFFF]/30 text-[#4DAFFF] hover:bg-[#4DAFFF]/10 hover:border-[#4DAFFF]/50"
+                      >
+                        {min}분
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom minutes input */}
+                <div>
+                  <label className="text-gray-400 font-mono text-xs block mb-2">커스텀 시간</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="180"
+                      value={customMinutes}
+                      onChange={(e) => setCustomMinutes(parseInt(e.target.value) || 1)}
+                      className="font-mono bg-[#0A0E1A] border-[#00FF88]/20 w-24"
+                    />
+                    <span className="self-center text-gray-400 font-mono text-sm">분</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={submitting}
+                      onClick={async () => {
+                        setSubmitting(true);
+                        try {
+                          await callAdminApi("setTimer", { durationSec: customMinutes * 60, autoCloseEnabled: eventConfig?.autoCloseEnabled ?? false });
+                          toast.success(`${customMinutes}분 타이머가 설정되었습니다.`);
+                        } catch (e) { toast.error((e as Error).message); }
+                        finally { setSubmitting(false); }
+                      }}
+                      className="font-mono text-xs"
+                    >
+                      설정
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Target time picker */}
+                <div>
+                  <label className="text-gray-400 font-mono text-xs block mb-2">특정 시간에 종료</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="time"
+                      value={targetTime}
+                      onChange={(e) => setTargetTime(e.target.value)}
+                      className="font-mono bg-[#0A0E1A] border-[#00FF88]/20 w-36"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={submitting || !targetTime}
+                      onClick={async () => {
+                        const [h, m] = targetTime.split(":").map(Number);
+                        const target = new Date();
+                        target.setHours(h, m, 0, 0);
+                        // 입력한 시간이 이미 지났으면 다음 날로 설정
+                        if (target.getTime() <= Date.now()) {
+                          target.setDate(target.getDate() + 1);
+                        }
+                        const diffSec = Math.floor((target.getTime() - Date.now()) / 1000);
+                        if (diffSec < 60) {
+                          toast.error("최소 1분 이상의 시간을 설정해주세요.");
+                          return;
+                        }
+                        setSubmitting(true);
+                        try {
+                          await callAdminApi("setTimer", { durationSec: diffSec, autoCloseEnabled: eventConfig?.autoCloseEnabled ?? false });
+                          toast.success(`${targetTime} 종료로 타이머가 설정되었습니다.`);
+                        } catch (e) { toast.error((e as Error).message); }
+                        finally { setSubmitting(false); }
+                      }}
+                      className="font-mono text-xs"
+                    >
+                      설정
+                    </Button>
+                    {targetTime && (
+                      <span className="self-center text-gray-500 font-mono text-xs">
+                        {(() => {
+                          const [h, m] = targetTime.split(":").map(Number);
+                          const target = new Date();
+                          target.setHours(h, m, 0, 0);
+                          if (target.getTime() <= Date.now()) target.setDate(target.getDate() + 1);
+                          const diffMin = Math.max(0, Math.floor((target.getTime() - Date.now()) / 60000));
+                          const dh = Math.floor(diffMin / 60);
+                          const dm = diffMin % 60;
+                          return dh > 0 ? `(약 ${dh}시간 ${dm}분 후)` : `(약 ${dm}분 후)`;
+                        })()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Extend buttons */}
+                <div>
+                  <label className="text-gray-400 font-mono text-xs block mb-2">시간 연장</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 5, 10].map((min) => (
+                      <Button
+                        key={min}
+                        variant="outline"
+                        size="sm"
+                        disabled={submitting || !eventConfig?.votingDeadline}
+                        onClick={async () => {
+                          setSubmitting(true);
+                          try {
+                            await callAdminApi("extendTimer", { additionalSec: min * 60 });
+                            toast.success(`${min}분 연장되었습니다.`);
+                          } catch (e) { toast.error((e as Error).message); }
+                          finally { setSubmitting(false); }
+                        }}
+                        className="font-mono text-xs border-[#00FF88]/30 text-[#00FF88] hover:bg-[#00FF88]/10 hover:border-[#00FF88]/50"
+                      >
+                        +{min}분
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Auto-close toggle + Reset */}
+                <div className="flex items-center justify-between pt-2 border-t border-[#00FF88]/10">
+                  <div className="flex items-center gap-3">
+                    <label className="text-gray-400 font-mono text-xs">자동 마감</label>
+                    <button
+                      onClick={async () => {
+                        if (!eventConfig) return;
+                        setSubmitting(true);
+                        try {
+                          const newVal = !eventConfig.autoCloseEnabled;
+                          await callAdminApi("toggleAutoClose", {
+                            autoCloseEnabled: newVal,
+                          });
+                          toast.success(newVal ? "자동 마감이 활성화되었습니다." : "자동 마감이 비활성화되었습니다.");
+                        } catch (e) { toast.error((e as Error).message); }
+                        finally { setSubmitting(false); }
+                      }}
+                      disabled={submitting}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        eventConfig?.autoCloseEnabled ? "bg-[#00FF88]" : "bg-gray-600"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          eventConfig?.autoCloseEnabled ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                    <span className="text-gray-500 font-mono text-xs">
+                      (타이머 종료 시 자동으로 투표 마감)
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={submitting || !eventConfig?.votingDeadline}
+                    onClick={async () => {
+                      if (!confirm("타이머를 초기화하시겠습니까?")) return;
+                      setSubmitting(true);
+                      try {
+                        await callAdminApi("resetTimer", {});
+                        toast.success("타이머가 초기화되었습니다.");
+                      } catch (e) { toast.error((e as Error).message); }
+                      finally { setSubmitting(false); }
+                    }}
+                    className="font-mono text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  >
+                    타이머 초기화
+                  </Button>
+                </div>
+              </div>
             </div>
 
             {/* Config Card */}

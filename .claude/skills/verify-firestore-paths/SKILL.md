@@ -21,13 +21,11 @@ description: Firestore 경로 일관성 검증. Firestore 접근 코드 수정 �
 |------|---------|
 | `lib/firebase.ts` | 클라이언트 Firebase SDK (getFirebaseDb, getFirebaseAuth) |
 | `lib/firebase-admin.ts` | Admin SDK (adminDb, adminAuth) |
-| `lib/firestore-helpers.ts` | Firestore 참조 헬퍼 (getEventRef, getTeamsRef 등) |
 | `lib/constants.ts` | EVENT_ID 상수 |
 | `app/api/admin/route.ts` | Admin API (서버사이드 Firestore 접근) |
 | `app/api/vote/route.ts` | Vote API (서버사이드 Firestore 접근) |
 | `app/vote/page.tsx` | 투표 페이지 (클라이언트 Firestore 구독) |
 | `app/admin/page.tsx` | 관리자 페이지 (클라이언트 Firestore 구독) |
-| `app/display/page.tsx` | 프로젝터 뷰 (클라이언트 Firestore 구독) |
 | `app/results/page.tsx` | 결과 페이지 (클라이언트 Firestore 구독) |
 
 ## Workflow

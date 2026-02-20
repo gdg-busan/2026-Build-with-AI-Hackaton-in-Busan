@@ -31,6 +31,8 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 import { MissionPanel } from "@/components/MissionPanel";
 import { AnnouncementTicker } from "@/components/AnnouncementTicker";
 import { CountdownTimer } from "@/components/CountdownTimer";
+import { useVotingTimer } from "@/hooks/useVotingTimer";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function VotePage() {
   const router = useRouter();
@@ -52,6 +54,14 @@ export default function VotePage() {
   const [inspectTeam, setInspectTeam] = useState<Team | null>(null);
   const [inspectMembers, setInspectMembers] = useState<MemberProfile[]>([]);
   const prevStatusRef = useRef<string | null>(null);
+  const voteTimer = useVotingTimer(eventConfig);
+
+  // Show toast when timer is extended
+  useEffect(() => {
+    if (voteTimer.wasExtended) {
+      toast.info("투표 시간이 연장되었습니다!");
+    }
+  }, [voteTimer.wasExtended]);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -80,6 +90,8 @@ export default function VotePage() {
           votingDeadline: data.votingDeadline?.toDate() ?? null,
           title: data.title ?? "",
           createdAt: data.createdAt?.toDate() ?? new Date(),
+          autoCloseEnabled: data.autoCloseEnabled ?? false,
+          timerDurationSec: data.timerDurationSec ?? null,
         });
       }
     });
@@ -268,8 +280,56 @@ export default function VotePage() {
 
   if (!user) return null;
 
+  const hasUrgency = voteTimer.urgency === "warning" || voteTimer.urgency === "critical" || voteTimer.urgency === "expired";
+
+  const urgencyBg = {
+    idle: { backgroundColor: "#0A0E1A" },
+    normal: { backgroundColor: "#0A0E1A" },
+    warning: { backgroundColor: "#1A1005" },
+    critical: { backgroundColor: "#1A0505" },
+    expired: { backgroundColor: "#1A0505" },
+  };
+
   return (
-    <div className="min-h-screen bg-background">
+    <motion.div
+      className={`min-h-screen relative ${hasUrgency ? "" : "bg-background"}`}
+      animate={urgencyBg[voteTimer.urgency] || { backgroundColor: "#0A0E1A" }}
+      transition={{ duration: 1.5, ease: "easeInOut" }}
+      style={hasUrgency ? {} : undefined}
+    >
+      {/* Urgency vignette overlay */}
+      <AnimatePresence>
+        {(voteTimer.urgency === "warning" || voteTimer.urgency === "critical") && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1 }}
+            className="fixed inset-0 pointer-events-none z-30"
+            style={{
+              background: voteTimer.urgency === "critical"
+                ? "radial-gradient(ellipse at center, transparent 30%, #FF000030 100%)"
+                : "radial-gradient(ellipse at center, transparent 40%, #FF6B3520 100%)",
+              animation: voteTimer.urgency === "critical" ? "pulse 2s ease-in-out infinite" : undefined,
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Top pulse bar for critical */}
+      <AnimatePresence>
+        {voteTimer.urgency === "critical" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0.3, 0.8, 0.3] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            className="fixed top-0 left-0 right-0 h-[2px] z-50"
+            style={{ background: "linear-gradient(90deg, transparent, #FF4444, transparent)" }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Top bar */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -500,6 +560,6 @@ export default function VotePage() {
 
       {/* Mission panel */}
       {eventConfig && <MissionPanel />}
-    </div>
+    </motion.div>
   );
 }

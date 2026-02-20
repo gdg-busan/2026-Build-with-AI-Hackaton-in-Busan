@@ -60,6 +60,8 @@ export default function ResultsPage() {
           votingDeadline: data.votingDeadline?.toDate() ?? null,
           title: data.title ?? "GDG Busan Hackathon",
           createdAt: data.createdAt?.toDate() ?? new Date(),
+          autoCloseEnabled: data.autoCloseEnabled ?? false,
+          timerDurationSec: data.timerDurationSec ?? null,
         });
       }
       setConfigLoading(false);
