@@ -148,7 +148,7 @@ export default function AdminPage() {
     // Subscribe to users (subcollection under event)
     const usersUnsub = onSnapshot(collection(eventDocRef, "users"), (snap) => {
       setUsers(
-        snap.docs.map((d) => ({ ...d.data() } as User))
+        snap.docs.map((d) => ({ uniqueCode: d.id, ...d.data() } as User))
       );
     });
 
@@ -1411,14 +1411,12 @@ export default function AdminPage() {
                               >
                                 복사
                               </button>
-                              {u.role !== "admin" && (
-                                <button
-                                  onClick={() => handleDeleteUser(u.uniqueCode, u.name)}
-                                  className="text-xs text-gray-500 hover:text-red-400 transition-colors"
-                                >
-                                  삭제
-                                </button>
-                              )}
+                              <button
+                                onClick={() => handleDeleteUser(u.uniqueCode, u.name)}
+                                className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+                              >
+                                삭제
+                              </button>
                             </div>
                           </td>
                         </tr>
