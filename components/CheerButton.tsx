@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
-import { getFirebaseAuth } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-context";
 import { EVENT_ID } from "@/lib/constants";
+import { sendCheer } from "@/lib/client-actions";
 import { toast } from "sonner";
 
 const EMOJIS = ["🔥", "❤️", "👏", "🎉"];
@@ -14,6 +15,7 @@ interface CheerButtonProps {
 }
 
 export function CheerButton({ teamId }: CheerButtonProps) {
+  const { user } = useAuth();
   const [cooldown, setCooldown] = useState(false);
   const [emojiCounts, setEmojiCounts] = useState<Record<string, number>>({});
 
@@ -39,31 +41,13 @@ export function CheerButton({ teamId }: CheerButtonProps) {
   }, [teamId]);
 
   const handleCheer = async (emoji: string) => {
-    if (cooldown) return;
+    if (cooldown || !user) return;
 
     setCooldown(true);
     setTimeout(() => setCooldown(false), 3000);
 
     try {
-      const token = await getFirebaseAuth().currentUser?.getIdToken();
-      if (!token) {
-        toast.error("인증 토큰을 가져올 수 없습니다");
-        return;
-      }
-
-      const res = await fetch("/api/cheer", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ teamId, emoji }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "응원에 실패했습니다");
-      }
+      await sendCheer(teamId, emoji, user.uid, user.name);
     } catch {
       toast.error("응원에 실패했습니다");
     }

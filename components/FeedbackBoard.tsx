@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { collection, query, orderBy, limit, onSnapshot, Timestamp } from "firebase/firestore";
 import { toast } from "sonner";
 import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-context";
 import { EVENT_ID } from "@/lib/constants";
+import { sendFeedback } from "@/lib/client-actions";
 import type { TeamFeedback } from "@/lib/types";
 
 interface FeedbackBoardProps {
@@ -32,6 +34,7 @@ const TYPE_COLORS: Record<TeamFeedback["type"], string> = {
 };
 
 export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
+  const { user } = useAuth();
   const [feedbacks, setFeedbacks] = useState<TeamFeedback[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -77,24 +80,14 @@ export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() || !user) return;
 
     setSubmitting(true);
     try {
-      const token = await getFirebaseAuth().currentUser?.getIdToken();
-      if (!token) throw new Error("인증 토큰을 가져올 수 없습니다");
-
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ teamId, text: text.trim(), type, anonymous }),
+      await sendFeedback(teamId, text.trim(), type, anonymous, {
+        uid: user.uid,
+        name: user.name,
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "피드백 전송에 실패했습니다");
 
       setText("");
       toast.success("피드백이 전송되었습니다!");
