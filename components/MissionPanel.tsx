@@ -56,7 +56,7 @@ export function MissionPanel() {
             }}
           />
 
-          <SheetHeader className="px-5 pt-5 pb-4 border-b border-primary/20 relative z-10">
+          <SheetHeader className="px-5 pt-5 pb-4 border-b border-primary/20">
             <SheetTitle className="font-mono text-primary text-base flex items-center gap-2">
               <span className="text-lg">🏆</span>
               <span className="glow-green">$ missions</span>
@@ -79,7 +79,7 @@ export function MissionPanel() {
             </div>
           </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 relative z-10">
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {MISSIONS.map((mission) => {
               const progress = missions.find(
                 (m) => m.missionId === mission.id
@@ -145,7 +145,7 @@ export function MissionPanel() {
             })}
           </div>
 
-          <div className="px-5 py-3 border-t border-primary/20 relative z-10">
+          <div className="px-5 py-3 border-t border-primary/20">
             <p className="text-[10px] text-muted-foreground/60 font-mono text-center">
               {"// 미션을 완료하고 배지를 획득하세요"}
             </p>

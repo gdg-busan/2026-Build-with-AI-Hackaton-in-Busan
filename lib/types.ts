@@ -8,6 +8,8 @@ export interface EventConfig {
   participantWeight: number;
   maxVotesPerUser: number;
   votingDeadline: Date | null;
+  autoCloseEnabled: boolean;
+  timerDurationSec: number | null;
   title: string;
   createdAt: Date;
 }

@@ -569,6 +569,48 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, users: results });
       }
 
+      case "setTimer": {
+        const { durationSec, autoCloseEnabled } = data;
+        const votingDeadline = new Date(Date.now() + durationSec * 1000);
+        await eventRef().update({
+          votingDeadline,
+          autoCloseEnabled: autoCloseEnabled ?? false,
+          timerDurationSec: durationSec,
+        });
+        return NextResponse.json({ success: true, votingDeadline: votingDeadline.toISOString() });
+      }
+
+      case "extendTimer": {
+        const { additionalSec } = data;
+        const snap = await eventRef().get();
+        const currentDeadline = snap.data()?.votingDeadline?.toDate() as Date | undefined;
+        if (!currentDeadline) {
+          return NextResponse.json({ error: "No active timer to extend" }, { status: 400 });
+        }
+        const now = Date.now();
+        const newDeadline =
+          currentDeadline.getTime() <= now
+            ? new Date(now + additionalSec * 1000)
+            : new Date(currentDeadline.getTime() + additionalSec * 1000);
+        await eventRef().update({ votingDeadline: newDeadline });
+        return NextResponse.json({ success: true, votingDeadline: newDeadline.toISOString() });
+      }
+
+      case "toggleAutoClose": {
+        const { autoCloseEnabled: acEnabled } = data;
+        await eventRef().update({ autoCloseEnabled: acEnabled ?? false });
+        return NextResponse.json({ success: true });
+      }
+
+      case "resetTimer": {
+        await eventRef().update({
+          votingDeadline: null,
+          timerDurationSec: null,
+          autoCloseEnabled: false,
+        });
+        return NextResponse.json({ success: true });
+      }
+
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
