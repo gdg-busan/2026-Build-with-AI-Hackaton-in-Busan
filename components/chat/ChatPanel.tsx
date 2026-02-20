@@ -5,6 +5,7 @@ import { MessageCircle, X } from "lucide-react";
 import { getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { useChatRoom, useUnreadCounts, markAsRead } from "@/hooks/useChatRoom";
+import { sendChatMessage } from "@/lib/client-actions";
 import { MessageList } from "./MessageList";
 import { ChatComposer } from "./ChatComposer";
 import { toast } from "sonner";
@@ -86,20 +87,12 @@ export function ChatPanel() {
     async (text: string) => {
       if (!user || !currentRoomId) return;
       try {
-        const token = await getFirebaseAuth().currentUser?.getIdToken();
-        if (!token) throw new Error("인증 토큰을 가져올 수 없습니다");
-
-        const res = await fetch("/api/chat/send", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ roomId: currentRoomId, text }),
+        await sendChatMessage(currentRoomId, text, {
+          uid: user.uid,
+          name: user.name,
+          role: user.role,
+          teamId: user.teamId,
         });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "메시지 전송에 실패했습니다");
 
         // Mark as read after sending
         markAsRead(user.uniqueCode, currentRoomId);
