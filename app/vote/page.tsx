@@ -1,43 +1,46 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { AnnouncementTicker } from "@/components/AnnouncementTicker";
+import { CountdownTimer } from "@/components/CountdownTimer";
+import { MemberProfileDialog } from "@/components/MemberProfileDialog";
+import { MissionPanel } from "@/components/MissionPanel";
+import { TeamCard } from "@/components/TeamCard";
+import { TeamDetailSheet } from "@/components/TeamDetailSheet";
+import { TeamEditDialog } from "@/components/TeamEditDialog";
+import { VoteConfirmDialog } from "@/components/VoteConfirmDialog";
+import { VotingProgress } from "@/components/VotingProgress";
+import { ChatPanel } from "@/components/chat/ChatPanel";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useMissions } from "@/hooks/useMissions";
+import { useVotingTimer } from "@/hooks/useVotingTimer";
+import { useAuth } from "@/lib/auth-context";
+import { EVENT_ID } from "@/lib/constants";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import type { EventConfig, MemberProfile, Team } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import {
   collection,
   doc,
+  documentId,
+  getDocs,
   onSnapshot,
   query,
-  getDocs,
   where,
-  documentId,
 } from "firebase/firestore";
-import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
-import { useAuth } from "@/lib/auth-context";
-import { EVENT_ID } from "@/lib/constants";
-import type { Team, EventConfig, MemberProfile } from "@/lib/types";
-import { useMissions } from "@/hooks/useMissions";
-import { TeamCard } from "@/components/TeamCard";
-import { TeamDetailSheet } from "@/components/TeamDetailSheet";
-import { VotingProgress } from "@/components/VotingProgress";
-import { VoteConfirmDialog } from "@/components/VoteConfirmDialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import { LogOut, CheckCircle2, Pencil, Trophy, UserPen } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle2, LogOut, Pencil, Trophy, UserPen } from "lucide-react";
 import Link from "next/link";
-import { TeamEditDialog } from "@/components/TeamEditDialog";
-import { MemberProfileDialog } from "@/components/MemberProfileDialog";
-import { ChatPanel } from "@/components/chat/ChatPanel";
-import { MissionPanel } from "@/components/MissionPanel";
-import { AnnouncementTicker } from "@/components/AnnouncementTicker";
-import { CountdownTimer } from "@/components/CountdownTimer";
-import { useVotingTimer } from "@/hooks/useVotingTimer";
-import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 export default function VotePage() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
-  const { updateProgress, updateUniqueProgress } = useMissions(user?.uniqueCode);
+  const { updateProgress, updateUniqueProgress } = useMissions(
+    user?.uniqueCode,
+  );
 
   const [eventConfig, setEventConfig] = useState<EventConfig | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -73,28 +76,35 @@ export default function VotePage() {
   // Real-time event config
   useEffect(() => {
     if (!user) return;
-    const unsub = onSnapshot(doc(getFirebaseDb(), "events", EVENT_ID), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        // 결과 공개로 전환되는 순간에만 자동 리디렉트 (최초 1회)
-        if (data.status === "revealed" && prevStatusRef.current !== null && prevStatusRef.current !== "revealed") {
-          router.push("/results");
+    const unsub = onSnapshot(
+      doc(getFirebaseDb(), "events", EVENT_ID),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          // 결과 공개로 전환되는 순간에만 자동 리디렉트 (최초 1회)
+          if (
+            data.status === "revealed" &&
+            prevStatusRef.current !== null &&
+            prevStatusRef.current !== "revealed"
+          ) {
+            router.push("/results");
+          }
+          prevStatusRef.current = data.status;
+          setEventConfig({
+            id: snap.id,
+            status: data.status,
+            judgeWeight: data.judgeWeight ?? 1,
+            participantWeight: data.participantWeight ?? 1,
+            maxVotesPerUser: data.maxVotesPerUser ?? 3,
+            votingDeadline: data.votingDeadline?.toDate() ?? null,
+            title: data.title ?? "",
+            createdAt: data.createdAt?.toDate() ?? new Date(),
+            autoCloseEnabled: data.autoCloseEnabled ?? false,
+            timerDurationSec: data.timerDurationSec ?? null,
+          });
         }
-        prevStatusRef.current = data.status;
-        setEventConfig({
-          id: snap.id,
-          status: data.status,
-          judgeWeight: data.judgeWeight ?? 1,
-          participantWeight: data.participantWeight ?? 1,
-          maxVotesPerUser: data.maxVotesPerUser ?? 3,
-          votingDeadline: data.votingDeadline?.toDate() ?? null,
-          title: data.title ?? "",
-          createdAt: data.createdAt?.toDate() ?? new Date(),
-          autoCloseEnabled: data.autoCloseEnabled ?? false,
-          timerDurationSec: data.timerDurationSec ?? null,
-        });
-      }
-    });
+      },
+    );
     return () => unsub();
   }, [user, router]);
 
@@ -120,7 +130,7 @@ export default function VotePage() {
           techStack: d.data().techStack ?? [],
         }));
         setTeams(t);
-      }
+      },
     );
     return () => unsub();
   }, [user]);
@@ -132,14 +142,14 @@ export default function VotePage() {
       collection(getFirebaseDb(), "events", EVENT_ID, "votes"),
       (snap) => {
         setVotedCount(
-          snap.docs.filter((d) => d.data().role === "participant").length
+          snap.docs.filter((d) => d.data().role === "participant").length,
         );
         const myVote = snap.docs.find((d) => d.id === user.uid);
         if (myVote) {
           setVoteSuccess(true);
           setSelectedTeams(myVote.data().selectedTeams ?? []);
         }
-      }
+      },
     );
     return () => unsub();
   }, [user]);
@@ -151,9 +161,9 @@ export default function VotePage() {
       collection(getFirebaseDb(), "events", EVENT_ID, "users"),
       (snap) => {
         setTotalCount(
-          snap.docs.filter((d) => d.data().role === "participant").length
+          snap.docs.filter((d) => d.data().role === "participant").length,
         );
-      }
+      },
     );
     return () => unsub();
   }, [user]);
@@ -168,7 +178,7 @@ export default function VotePage() {
           setMyDisplayName(snap.data().name ?? "");
           setMyBio(snap.data().bio ?? null);
         }
-      }
+      },
     );
     return () => unsub();
   }, [user]);
@@ -184,7 +194,10 @@ export default function VotePage() {
     const usersCol = collection(getFirebaseDb(), "events", EVENT_ID, "users");
 
     // Firestore 'in' query supports up to 30 items
-    const q = query(usersCol, where(documentId(), "in", memberIds.slice(0, 30)));
+    const q = query(
+      usersCol,
+      where(documentId(), "in", memberIds.slice(0, 30)),
+    );
     getDocs(q).then((snap) => {
       const members: MemberProfile[] = snap.docs.map((d) => ({
         uniqueCode: d.id,
@@ -201,7 +214,7 @@ export default function VotePage() {
       setInspectTeam(team);
       updateUniqueProgress("visit_all_teams", team.id, teams.length);
     },
-    [updateUniqueProgress, teams.length]
+    [updateUniqueProgress, teams.length],
   );
 
   const handleToggle = useCallback(
@@ -218,7 +231,7 @@ export default function VotePage() {
         return [...prev, teamId];
       });
     },
-    [eventConfig]
+    [eventConfig],
   );
 
   const handleSubmit = async () => {
@@ -280,7 +293,10 @@ export default function VotePage() {
 
   if (!user) return null;
 
-  const hasUrgency = voteTimer.urgency === "warning" || voteTimer.urgency === "critical" || voteTimer.urgency === "expired";
+  const hasUrgency =
+    voteTimer.urgency === "warning" ||
+    voteTimer.urgency === "critical" ||
+    voteTimer.urgency === "expired";
 
   const urgencyBg = {
     idle: { backgroundColor: "#0A0E1A" },
@@ -299,7 +315,8 @@ export default function VotePage() {
     >
       {/* Urgency vignette overlay */}
       <AnimatePresence>
-        {(voteTimer.urgency === "warning" || voteTimer.urgency === "critical") && (
+        {(voteTimer.urgency === "warning" ||
+          voteTimer.urgency === "critical") && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -307,10 +324,14 @@ export default function VotePage() {
             transition={{ duration: 1 }}
             className="fixed inset-0 pointer-events-none z-30"
             style={{
-              background: voteTimer.urgency === "critical"
-                ? "radial-gradient(ellipse at center, transparent 30%, #FF000030 100%)"
-                : "radial-gradient(ellipse at center, transparent 40%, #FF6B3520 100%)",
-              animation: voteTimer.urgency === "critical" ? "pulse 2s ease-in-out infinite" : undefined,
+              background:
+                voteTimer.urgency === "critical"
+                  ? "radial-gradient(ellipse at center, transparent 30%, #FF000030 100%)"
+                  : "radial-gradient(ellipse at center, transparent 40%, #FF6B3520 100%)",
+              animation:
+                voteTimer.urgency === "critical"
+                  ? "pulse 2s ease-in-out infinite"
+                  : undefined,
             }}
           />
         )}
@@ -325,63 +346,78 @@ export default function VotePage() {
             exit={{ opacity: 0 }}
             transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
             className="fixed top-0 left-0 right-0 h-[2px] z-50"
-            style={{ background: "linear-gradient(90deg, transparent, #FF4444, transparent)" }}
+            style={{
+              background:
+                "linear-gradient(90deg, transparent, #FF4444, transparent)",
+            }}
           />
         )}
       </AnimatePresence>
 
       {/* Top bar */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="font-mono font-bold text-primary glow-green text-lg">
-              $ vote
+        <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap sm:flex-nowrap items-center justify-between gap-y-2 gap-x-1 overflow-hidden">
+          <div className="flex items-center gap-1.5 md:gap-3 flex-shrink min-w-0">
+            <span className="font-mono font-bold text-primary glow-green text-xs sm:text-sm md:text-base flex items-center gap-1 truncate">
+              <span className="text-muted-foreground hidden sm:inline">
+                ~/gdg-busan/hackathon/
+              </span>
+              <span className="text-muted-foreground sm:hidden tracking-tighter">
+                ~/
+              </span>
+              vote <span className="typing-cursor shrink-0" />
             </span>
-            <span className="font-mono text-foreground">{myDisplayName || user.name}</span>
+            <span className="font-mono text-foreground text-xs sm:text-sm truncate opacity-80 shrink-0 max-w-[80px] sm:max-w-none">
+              {myDisplayName || user.name}
+            </span>
             <Badge
-              className={
+              className={cn(
+                "font-mono shrink-0 whitespace-nowrap text-[10px] uppercase hidden sm:flex",
                 user.role === "judge"
-                  ? "bg-orange-500/20 text-orange-400 border-orange-500/30 font-mono"
-                  : "bg-blue-500/20 text-blue-400 border-blue-500/30 font-mono"
-              }
+                  ? "bg-orange-500/20 text-orange-400 border-orange-500/30"
+                  : "bg-blue-500/20 text-blue-400 border-blue-500/30",
+              )}
             >
-              {user.role === "judge" ? "Judge" : "Participant"}
+              {user.role}
             </Badge>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
             {/* Profile edit button - hidden when revealed */}
-            {(user.role === "participant" || user.role === "judge") && eventConfig?.status !== "revealed" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setProfileDialogOpen(true)}
-                className="font-mono gap-2 text-primary hover:text-primary/80"
-              >
-                <UserPen className="w-4 h-4" />
-                프로필
-              </Button>
-            )}
+            {(user.role === "participant" || user.role === "judge") &&
+              eventConfig?.status !== "revealed" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setProfileDialogOpen(true)}
+                  className="font-mono gap-1.5 md:gap-2 text-primary hover:text-primary/80 px-2 md:px-3 text-xs md:text-sm"
+                >
+                  <UserPen className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  <span className="hidden sm:inline">프로필</span>
+                </Button>
+              )}
             {/* Team edit button - participants only, hidden when revealed */}
-            {user.role === "participant" && myTeam && eventConfig?.status !== "revealed" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setEditDialogOpen(true)}
-                className="font-mono gap-2 text-[#4DAFFF] hover:text-[#4DAFFF]/80"
-              >
-                <Pencil className="w-4 h-4" />
-                팀 정보 수정
-              </Button>
-            )}
+            {user.role === "participant" &&
+              myTeam &&
+              eventConfig?.status !== "revealed" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditDialogOpen(true)}
+                  className="font-mono gap-1.5 md:gap-2 text-[#4DAFFF] hover:text-[#4DAFFF]/80 px-2 md:px-3 text-xs md:text-sm"
+                >
+                  <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  <span className="hidden sm:inline">팀 정보 수정</span>
+                </Button>
+              )}
             {/* Results navigation */}
             <Link href="/results">
               <Button
                 variant="ghost"
                 size="sm"
-                className="font-mono gap-2 text-[#FF6B35] hover:text-[#FF6B35]/80"
+                className="font-mono gap-1.5 md:gap-2 text-[#FF6B35] hover:text-[#FF6B35]/80 px-2 md:px-3 text-xs md:text-sm"
               >
-                <Trophy className="w-4 h-4" />
-                결과 보기
+                <Trophy className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">결과 보기</span>
               </Button>
             </Link>
             <Button
@@ -391,10 +427,10 @@ export default function VotePage() {
                 await logout();
                 router.replace("/");
               }}
-              className="font-mono gap-2"
+              className="font-mono gap-1.5 md:gap-2 px-2 md:px-3 text-xs md:text-sm"
             >
-              <LogOut className="w-4 h-4" />
-              logout
+              <LogOut className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              <span className="hidden sm:inline">logout</span>
             </Button>
           </div>
         </div>
@@ -404,7 +440,6 @@ export default function VotePage() {
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         {/* Countdown timer */}
         {eventConfig && <CountdownTimer eventConfig={eventConfig} />}
-
         {/* Status banner for non-voting states */}
         {eventConfig && !isVotingActive && !voteSuccess && (
           <div className="rounded-xl border border-border bg-card p-8 text-center space-y-3">
@@ -412,15 +447,15 @@ export default function VotePage() {
               {eventConfig.status === "waiting"
                 ? "$ waiting_for_vote_start..."
                 : eventConfig.status === "revealed"
-                ? "$ results_revealed!"
-                : "$ voting_closed"}
+                  ? "$ results_revealed!"
+                  : "$ voting_closed"}
             </p>
             <p className="text-muted-foreground font-mono text-sm">
               {eventConfig.status === "waiting"
                 ? "투표가 아직 시작되지 않았습니다. 잠시 기다려 주세요."
                 : eventConfig.status === "revealed"
-                ? "결과가 공개되었습니다. 결과 페이지에서 확인하세요!"
-                : "투표가 종료되었습니다."}
+                  ? "결과가 공개되었습니다. 결과 페이지에서 확인하세요!"
+                  : "투표가 종료되었습니다."}
             </p>
           </div>
         )}
@@ -475,21 +510,21 @@ export default function VotePage() {
                   return aIsOwn - bIsOwn;
                 })
                 .map((team) => (
-                <TeamCard
-                  key={team.id}
-                  team={team}
-                  isSelected={selectedTeams.includes(team.id)}
-                  isOwnTeam={user.teamId === team.id}
-                  onToggle={isVotingActive ? handleToggle : () => {}}
-                  onInspect={handleInspect}
-                  disabled={
-                    !isVotingActive ||
-                    voteSuccess ||
-                    (!selectedTeams.includes(team.id) &&
-                      selectedTeams.length >= maxVotes)
-                  }
-                />
-              ))}
+                  <TeamCard
+                    key={team.id}
+                    team={team}
+                    isSelected={selectedTeams.includes(team.id)}
+                    isOwnTeam={user.teamId === team.id}
+                    onToggle={isVotingActive ? handleToggle : () => {}}
+                    onInspect={handleInspect}
+                    disabled={
+                      !isVotingActive ||
+                      voteSuccess ||
+                      (!selectedTeams.includes(team.id) &&
+                        selectedTeams.length >= maxVotes)
+                    }
+                  />
+                ))}
             </div>
           </>
         )}
@@ -528,9 +563,7 @@ export default function VotePage() {
         isSelected={
           inspectTeam ? selectedTeams.includes(inspectTeam.id) : false
         }
-        isOwnTeam={
-          inspectTeam ? user.teamId === inspectTeam.id : false
-        }
+        isOwnTeam={inspectTeam ? user.teamId === inspectTeam.id : false}
         canVote={isVotingActive && !voteSuccess}
         maxReached={selectedTeams.length >= maxVotes}
         onToggleVote={handleToggle}
