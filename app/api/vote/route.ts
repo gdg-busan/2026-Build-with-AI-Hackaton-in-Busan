@@ -37,17 +37,17 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body = await req.json();
-    const { selectedTeams: rawSelectedTeams }: { selectedTeams: string[] } = body;
+    const { selectedTeams: rawSelectedTeams } = body;
 
-    // Deduplicate to prevent counting same team multiple times
-    const selectedTeams = [...new Set(rawSelectedTeams)];
-
-    if (!Array.isArray(selectedTeams) || selectedTeams.length === 0) {
+    if (!Array.isArray(rawSelectedTeams) || rawSelectedTeams.length === 0) {
       return NextResponse.json(
         { error: "선택한 팀이 없습니다" },
         { status: 400 }
       );
     }
+
+    // Deduplicate to prevent counting same team multiple times
+    const selectedTeams = [...new Set(rawSelectedTeams as string[])];
 
     const eventRef = adminDb.doc(`events/${EVENT_ID}`);
     const eventSnap = await eventRef.get();
