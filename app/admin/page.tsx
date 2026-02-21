@@ -45,6 +45,12 @@ const STATUS_LABELS: Record<EventStatus, string> = {
   revealed_final: "최종 발표",
 };
 
+const NEXT_STATUS_MAP: Partial<Record<EventStatus, { status: EventStatus; message: string }>> = {
+  waiting: { status: "voting_p1", message: "타이머 만료로 1차 투표가 시작되었습니다." },
+  voting_p1: { status: "closed_p1", message: "타이머 만료로 1차 투표가 자동 마감되었습니다." },
+  voting_p2: { status: "closed_p2", message: "타이머 만료로 2차 투표가 자동 마감되었습니다." },
+};
+
 
 export default function AdminPage() {
   const { user, loading, logout } = useAuth();
@@ -294,21 +300,15 @@ export default function AdminPage() {
   );
 
   // Auto-advance: when timer expires and autoCloseEnabled, advance to next status
-  const nextStatusMap: Partial<Record<EventStatus, { status: EventStatus; message: string }>> = {
-    waiting: { status: "voting_p1", message: "타이머 만료로 1차 투표가 시작되었습니다." },
-    voting_p1: { status: "closed_p1", message: "타이머 만료로 1차 투표가 자동 마감되었습니다." },
-    voting_p2: { status: "closed_p2", message: "타이머 만료로 2차 투표가 자동 마감되었습니다." },
-  };
-
   useEffect(() => {
     if (
       timer.isExpired &&
       eventConfig?.autoCloseEnabled &&
       eventConfig?.status &&
-      nextStatusMap[eventConfig.status] &&
+      NEXT_STATUS_MAP[eventConfig.status] &&
       !autoCloseTriggeredRef.current
     ) {
-      const next = nextStatusMap[eventConfig.status]!;
+      const next = NEXT_STATUS_MAP[eventConfig.status]!;
       const currentStatus = eventConfig.status;
       autoCloseTriggeredRef.current = true;
       callAdminApi("updateEventStatus", { status: next.status })

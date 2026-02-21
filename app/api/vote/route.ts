@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body = await req.json();
-    const { selectedTeams }: { selectedTeams: string[] } = body;
+    const { selectedTeams: rawSelectedTeams }: { selectedTeams: string[] } = body;
+
+    // Deduplicate to prevent counting same team multiple times
+    const selectedTeams = [...new Set(rawSelectedTeams)];
 
     if (!Array.isArray(selectedTeams) || selectedTeams.length === 0) {
       return NextResponse.json(
@@ -111,20 +114,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Check duplicate vote using phase-specific field
-    const userRef = adminDb.doc(`events/${EVENT_ID}/users/${uid}`);
-    const userSnap = await userRef.get();
-    if (userSnap.exists) {
-      const userData = userSnap.data()!;
-      const hasVotedField = phase === "p1" ? "hasVotedP1" : "hasVotedP2";
-      if (userData[hasVotedField] === true) {
-        return NextResponse.json(
-          { error: "이미 투표하셨습니다" },
-          { status: 409 }
-        );
-      }
-    }
-
     // Validate: selectedTeams doesn't include user's own team
     if (userTeamId && selectedTeams.includes(userTeamId)) {
       return NextResponse.json(
@@ -147,40 +136,57 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Atomic batch write
-    const batch = adminDb.batch();
-
-    // Vote document ID is phase-prefixed
+    // Atomic transaction: prevents TOCTOU race on duplicate vote check
+    const userRef = adminDb.doc(`events/${EVENT_ID}/users/${uid}`);
+    const hasVotedField = phase === "p1" ? "hasVotedP1" : "hasVotedP2";
     const voteDocId = `${phase}_${uid}`;
     const voteRef = adminDb.doc(`events/${EVENT_ID}/votes/${voteDocId}`);
-
-    // Write vote document with phase field
-    batch.set(voteRef, {
-      voterId: uid,
-      selectedTeams,
-      role,
-      timestamp: new Date(),
-      phase,
-    });
-
-    // Increment vote counts on each team based on phase
     const voteField =
       phase === "p2" ? "judgeVoteCount" : "participantVoteCount";
-    for (const teamId of selectedTeams) {
-      const teamRef = adminDb.doc(`events/${EVENT_ID}/teams/${teamId}`);
-      batch.update(teamRef, {
-        [voteField]: FieldValue.increment(1),
+
+    try {
+      await adminDb.runTransaction(async (transaction) => {
+        // Read user doc inside transaction for isolation
+        const userSnap = await transaction.get(userRef);
+        if (userSnap.exists) {
+          const userData = userSnap.data()!;
+          if (userData[hasVotedField] === true) {
+            throw new Error("ALREADY_VOTED");
+          }
+        }
+
+        // Write vote document
+        transaction.set(voteRef, {
+          voterId: uid,
+          selectedTeams,
+          role,
+          timestamp: new Date(),
+          phase,
+        });
+
+        // Increment vote counts on each team
+        for (const teamId of selectedTeams) {
+          const teamRef = adminDb.doc(`events/${EVENT_ID}/teams/${teamId}`);
+          transaction.update(teamRef, {
+            [voteField]: FieldValue.increment(1),
+          });
+        }
+
+        // Update user's hasVoted flags
+        transaction.update(userRef, {
+          [hasVotedField]: true,
+          hasVoted: true,
+        });
       });
+    } catch (err) {
+      if (err instanceof Error && err.message === "ALREADY_VOTED") {
+        return NextResponse.json(
+          { error: "이미 투표하셨습니다" },
+          { status: 409 }
+        );
+      }
+      throw err;
     }
-
-    // Update user's phase-specific hasVoted flag and legacy hasVoted for backwards compat
-    const hasVotedField = phase === "p1" ? "hasVotedP1" : "hasVotedP2";
-    batch.update(userRef, {
-      [hasVotedField]: true,
-      hasVoted: true,
-    });
-
-    await batch.commit();
 
     return NextResponse.json({ success: true });
   } catch (err) {

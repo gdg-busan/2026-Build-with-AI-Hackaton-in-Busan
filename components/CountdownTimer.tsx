@@ -12,7 +12,6 @@ interface CountdownTimerProps {
 export function CountdownTimer({ eventConfig }: CountdownTimerProps) {
   const [dotCount, setDotCount] = useState(1);
   const timer = useVotingTimer(eventConfig);
-  const [showExtended, setShowExtended] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -20,15 +19,6 @@ export function CountdownTimer({ eventConfig }: CountdownTimerProps) {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  // Show extension notification
-  useEffect(() => {
-    if (timer.wasExtended) {
-      setShowExtended(true);
-    } else {
-      setShowExtended(false);
-    }
-  }, [timer.wasExtended]);
 
   const { status } = eventConfig;
 
@@ -99,7 +89,7 @@ export function CountdownTimer({ eventConfig }: CountdownTimerProps) {
 
           {/* Extension notification */}
           <AnimatePresence>
-            {showExtended && (
+            {timer.wasExtended && (
               <motion.div
                 initial={{ opacity: 0, y: -5, height: 0 }}
                 animate={{ opacity: 1, y: 0, height: "auto" }}
@@ -226,7 +216,7 @@ export function CountdownTimer({ eventConfig }: CountdownTimerProps) {
 
           {/* Extension notification - below timer */}
           <AnimatePresence>
-            {showExtended && (
+            {timer.wasExtended && (
               <motion.div
                 initial={{ opacity: 0, y: -5, height: 0 }}
                 animate={{ opacity: 1, y: 0, height: "auto" }}

@@ -137,9 +137,11 @@ export default function VotePage() {
     return () => unsub();
   }, [user]);
 
+  const eventStatus = eventConfig?.status;
+
   // Real-time votes count + check if current user voted
   useEffect(() => {
-    if (!user || !eventConfig) return;
+    if (!user || !eventStatus) return;
     const unsub = onSnapshot(
       collection(getFirebaseDb(), "events", EVENT_ID, "votes"),
       (snap) => {
@@ -148,7 +150,7 @@ export default function VotePage() {
         );
 
         // Determine which phase vote doc to look for
-        const currentPhase = eventConfig.status === "voting_p2" ? "p2" : "p1";
+        const currentPhase = eventStatus === "voting_p2" ? "p2" : "p1";
         const myVoteId = `${currentPhase}_${user.uid}`;
         const myVote = snap.docs.find((d) => d.id === myVoteId);
         if (myVote) {
@@ -158,7 +160,7 @@ export default function VotePage() {
       },
     );
     return () => unsub();
-  }, [user, eventConfig?.status]);
+  }, [user, eventStatus]);
 
   // Total eligible voters (participants only)
   useEffect(() => {
@@ -171,13 +173,13 @@ export default function VotePage() {
         );
 
         // Also update voteSuccess based on hasVotedP1/hasVotedP2
-        if (eventConfig) {
+        if (eventStatus) {
           const myUserDoc = snap.docs.find((d) => d.id === user.uniqueCode);
           if (myUserDoc) {
             const userData = myUserDoc.data();
-            if (eventConfig.status === "voting_p1" && userData.hasVotedP1) {
+            if (eventStatus === "voting_p1" && userData.hasVotedP1) {
               setVoteSuccess(true);
-            } else if (eventConfig.status === "voting_p2" && userData.hasVotedP2) {
+            } else if (eventStatus === "voting_p2" && userData.hasVotedP2) {
               setVoteSuccess(true);
             }
           }
@@ -185,7 +187,7 @@ export default function VotePage() {
       },
     );
     return () => unsub();
-  }, [user, eventConfig?.status]);
+  }, [user, eventStatus]);
 
   // Fetch current user's bio from Firestore
   useEffect(() => {
@@ -198,10 +200,10 @@ export default function VotePage() {
           setMyBio(snap.data().bio ?? null);
 
           // Update voteSuccess based on user doc hasVotedP1/hasVotedP2
-          if (eventConfig) {
-            if (eventConfig.status === "voting_p1" && snap.data().hasVotedP1) {
+          if (eventStatus) {
+            if (eventStatus === "voting_p1" && snap.data().hasVotedP1) {
               setVoteSuccess(true);
-            } else if (eventConfig.status === "voting_p2" && snap.data().hasVotedP2) {
+            } else if (eventStatus === "voting_p2" && snap.data().hasVotedP2) {
               setVoteSuccess(true);
             }
           }
@@ -209,7 +211,7 @@ export default function VotePage() {
       },
     );
     return () => unsub();
-  }, [user, eventConfig?.status]);
+  }, [user, eventStatus]);
 
   // Reset voteSuccess when phase changes
   useEffect(() => {
@@ -312,9 +314,6 @@ export default function VotePage() {
   const myTeam = teams.find((t) => t.id === user?.teamId);
 
   const status = eventConfig?.status;
-
-  // isVotingActive: true for voting_p1 AND voting_p2 (but role-gated)
-  const isVotingActive = status === "voting_p1" || status === "voting_p2";
 
   // Whether this specific user can actually cast a vote right now
   const canUserVote =
