@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:admin": "tsx scripts/seed-admin.ts",
+    "seed:participant": "tsx scripts/seed-participant.ts",
+    "test": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
