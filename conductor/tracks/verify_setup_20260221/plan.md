@@ -1,14 +1,14 @@
 # Implementation Plan - Verify Core Functionality & Environment Setup
 
 ## Phase 1: Environment & Build Verification
-- [ ] Task: Validate Environment Configuration
-    - [ ] Check `.env.local` against `.env.local.example`.
-    - [ ] Verify Firebase Admin credentials format.
-- [ ] Task: Dependency & Build Check
-    - [ ] Run `pnpm install` to ensure lockfile consistency.
-    - [ ] Run `pnpm lint` to check code quality.
-    - [ ] Run `pnpm build` to verify production build.
-- [ ] Task: Conductor - User Manual Verification 'Environment & Build Verification' (Protocol in workflow.md)
+- [x] Task: Validate Environment Configuration [ccd7114]
+    - [x] Check `.env.local` against `.env.local.example`.
+    - [x] Verify Firebase Admin credentials format.
+- [x] Task: Dependency & Build Check [3b6b768]
+    - [x] Run `pnpm install` to ensure lockfile consistency.
+    - [x] Run `pnpm lint` to check code quality.
+    - [x] Run `pnpm build` to verify production build.
+- [~] Task: Conductor - User Manual Verification 'Environment & Build Verification' (Protocol in workflow.md)
 
 ## Phase 2: Database Seeding & Runtime Test
 - [ ] Task: Execute Seed Script
