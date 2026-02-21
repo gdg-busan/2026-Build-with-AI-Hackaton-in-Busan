@@ -451,12 +451,12 @@ export default function AdminPage() {
   };
 
   const handleResetAll = async () => {
-    if (!confirm("모든 팀, 참가자, 투표를 초기화하시겠습니까? 관리자 계정만 유지됩니다.")) return;
+    if (!confirm("모든 팀, 참가자, 투표, 채팅, 공지사항을 초기화하시겠습니까? 관리자 계정만 유지됩니다.")) return;
     if (!confirm("정말로 전체 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다!")) return;
     setSubmitting(true);
     try {
       await callAdminApi("resetAll", {});
-      toast.success("전체 초기화가 완료되었습니다. 관리자 계정만 유지됩니다.");
+      toast.success("전체 초기화 완료! 팀, 참가자, 투표, 채팅, 공지사항이 모두 삭제되었습니다.");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

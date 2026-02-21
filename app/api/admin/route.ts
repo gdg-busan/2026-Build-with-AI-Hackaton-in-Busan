@@ -483,6 +483,18 @@ export async function POST(request: NextRequest) {
       }
 
       case "resetAll": {
+        // Helper: delete all docs in a subcollection
+        const deleteSubcollection = async (
+          parentRef: FirebaseFirestore.DocumentReference,
+          subcolName: string
+        ) => {
+          const snap = await parentRef.collection(subcolName).get();
+          if (snap.empty) return;
+          const batch = adminDb.batch();
+          snap.docs.forEach((doc) => batch.delete(doc.ref));
+          await batch.commit();
+        };
+
         // Delete all votes
         const allVotes = await votesCol().get();
         if (!allVotes.empty) {
@@ -491,28 +503,60 @@ export async function POST(request: NextRequest) {
           await batch.commit();
         }
 
-        // Delete all teams
+        // Delete all teams (including cheers, feedbacks subcollections)
         const allTeams = await teamsCol().get();
         if (!allTeams.empty) {
+          for (const teamDoc of allTeams.docs) {
+            await deleteSubcollection(teamDoc.ref, "cheers");
+            await deleteSubcollection(teamDoc.ref, "feedbacks");
+          }
           const batch = adminDb.batch();
           allTeams.docs.forEach((doc) => batch.delete(doc.ref));
           await batch.commit();
         }
 
-        // Delete all non-admin users
+        // Delete all non-admin users (including roomState, missions subcollections)
         const allUsers = await usersCol().get();
         if (!allUsers.empty) {
           const batch = adminDb.batch();
-          allUsers.docs.forEach((doc) => {
-            if (doc.data().role !== "admin") {
-              batch.delete(doc.ref);
+          for (const userDoc of allUsers.docs) {
+            if (userDoc.data().role !== "admin") {
+              await deleteSubcollection(userDoc.ref, "roomState");
+              await deleteSubcollection(userDoc.ref, "missions");
+              batch.delete(userDoc.ref);
             }
-          });
+          }
           await batch.commit();
         }
 
-        // Reset event status to waiting
-        await eventRef().update({ status: "waiting" });
+        // Delete all chat rooms (including messages subcollections)
+        const allChatRooms = await chatRoomsCol().get();
+        if (!allChatRooms.empty) {
+          for (const roomDoc of allChatRooms.docs) {
+            await deleteSubcollection(roomDoc.ref, "messages");
+          }
+          const batch = adminDb.batch();
+          allChatRooms.docs.forEach((doc) => batch.delete(doc.ref));
+          await batch.commit();
+        }
+
+        // Delete all announcements
+        const allAnnouncements = await announcementsCol().get();
+        if (!allAnnouncements.empty) {
+          const batch = adminDb.batch();
+          allAnnouncements.docs.forEach((doc) => batch.delete(doc.ref));
+          await batch.commit();
+        }
+
+        // Reset event status and clear phase data
+        await eventRef().update({
+          status: "waiting",
+          phase1SelectedTeamIds: FieldValue.delete(),
+          phase1FinalizedAt: FieldValue.delete(),
+          finalRankingOverrides: FieldValue.delete(),
+          timerDurationSec: null,
+          autoCloseEnabled: false,
+        });
 
         return NextResponse.json({ success: true });
       }
