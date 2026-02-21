@@ -159,7 +159,7 @@ export function CountdownTimer({ eventConfig }: CountdownTimerProps) {
     );
   }
 
-  if (status === "voting") {
+  if (status === "voting_p1" || status === "voting_p2") {
     if (eventConfig.votingDeadline && !timer.isExpired) {
       const urgencyStyles = {
         normal: {
@@ -286,7 +286,7 @@ export function CountdownTimer({ eventConfig }: CountdownTimerProps) {
     );
   }
 
-  if (status === "closed") {
+  if (status === "closed_p1" || status === "closed_p2") {
     return (
       <div className="flex items-center justify-center gap-2 py-2">
         <span
@@ -299,7 +299,7 @@ export function CountdownTimer({ eventConfig }: CountdownTimerProps) {
     );
   }
 
-  if (status === "revealed") {
+  if (status === "revealed_p1" || status === "revealed_final") {
     return (
       <div className="flex items-center justify-center gap-2 py-2">
         <span

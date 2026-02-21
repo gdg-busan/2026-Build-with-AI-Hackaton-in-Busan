@@ -83,9 +83,10 @@ export default function VotePage() {
           const data = snap.data();
           // 결과 공개로 전환되는 순간에만 자동 리디렉트 (최초 1회)
           if (
-            data.status === "revealed" &&
+            (data.status === "revealed_p1" || data.status === "revealed_final") &&
             prevStatusRef.current !== null &&
-            prevStatusRef.current !== "revealed"
+            prevStatusRef.current !== "revealed_p1" &&
+            prevStatusRef.current !== "revealed_final"
           ) {
             router.push("/results");
           }
@@ -101,6 +102,7 @@ export default function VotePage() {
             createdAt: data.createdAt?.toDate() ?? new Date(),
             autoCloseEnabled: data.autoCloseEnabled ?? false,
             timerDurationSec: data.timerDurationSec ?? null,
+            phase1SelectedTeamIds: data.phase1SelectedTeamIds ?? undefined,
           });
         }
       },
@@ -137,14 +139,18 @@ export default function VotePage() {
 
   // Real-time votes count + check if current user voted
   useEffect(() => {
-    if (!user) return;
+    if (!user || !eventConfig) return;
     const unsub = onSnapshot(
       collection(getFirebaseDb(), "events", EVENT_ID, "votes"),
       (snap) => {
         setVotedCount(
           snap.docs.filter((d) => d.data().role === "participant").length,
         );
-        const myVote = snap.docs.find((d) => d.id === user.uid);
+
+        // Determine which phase vote doc to look for
+        const currentPhase = eventConfig.status === "voting_p2" ? "p2" : "p1";
+        const myVoteId = `${currentPhase}_${user.uid}`;
+        const myVote = snap.docs.find((d) => d.id === myVoteId);
         if (myVote) {
           setVoteSuccess(true);
           setSelectedTeams(myVote.data().selectedTeams ?? []);
@@ -152,7 +158,7 @@ export default function VotePage() {
       },
     );
     return () => unsub();
-  }, [user]);
+  }, [user, eventConfig?.status]);
 
   // Total eligible voters (participants only)
   useEffect(() => {
@@ -163,10 +169,23 @@ export default function VotePage() {
         setTotalCount(
           snap.docs.filter((d) => d.data().role === "participant").length,
         );
+
+        // Also update voteSuccess based on hasVotedP1/hasVotedP2
+        if (eventConfig) {
+          const myUserDoc = snap.docs.find((d) => d.id === user.uniqueCode);
+          if (myUserDoc) {
+            const userData = myUserDoc.data();
+            if (eventConfig.status === "voting_p1" && userData.hasVotedP1) {
+              setVoteSuccess(true);
+            } else if (eventConfig.status === "voting_p2" && userData.hasVotedP2) {
+              setVoteSuccess(true);
+            }
+          }
+        }
       },
     );
     return () => unsub();
-  }, [user]);
+  }, [user, eventConfig?.status]);
 
   // Fetch current user's bio from Firestore
   useEffect(() => {
@@ -177,11 +196,26 @@ export default function VotePage() {
         if (snap.exists()) {
           setMyDisplayName(snap.data().name ?? "");
           setMyBio(snap.data().bio ?? null);
+
+          // Update voteSuccess based on user doc hasVotedP1/hasVotedP2
+          if (eventConfig) {
+            if (eventConfig.status === "voting_p1" && snap.data().hasVotedP1) {
+              setVoteSuccess(true);
+            } else if (eventConfig.status === "voting_p2" && snap.data().hasVotedP2) {
+              setVoteSuccess(true);
+            }
+          }
         }
       },
     );
     return () => unsub();
-  }, [user]);
+  }, [user, eventConfig?.status]);
+
+  // Reset voteSuccess when phase changes
+  useEffect(() => {
+    setVoteSuccess(false);
+    setSelectedTeams([]);
+  }, [eventConfig?.status]);
 
   // Fetch member profiles when inspectTeam changes
   useEffect(() => {
@@ -276,12 +310,32 @@ export default function VotePage() {
   const selectedTeamObjects = teams.filter((t) => selectedTeams.includes(t.id));
   const maxVotes = eventConfig?.maxVotesPerUser ?? 3;
   const myTeam = teams.find((t) => t.id === user?.teamId);
-  const isVotingActive = eventConfig?.status === "voting";
+
+  const status = eventConfig?.status;
+
+  // isVotingActive: true for voting_p1 AND voting_p2 (but role-gated)
+  const isVotingActive = status === "voting_p1" || status === "voting_p2";
+
+  // Whether this specific user can actually cast a vote right now
+  const canUserVote =
+    (status === "voting_p1" && user?.role === "participant") ||
+    (status === "voting_p2" && user?.role === "judge");
+
+  // Teams to display in the grid
+  const displayTeams =
+    status === "voting_p2" && eventConfig?.phase1SelectedTeamIds
+      ? teams.filter((t) => eventConfig.phase1SelectedTeamIds!.includes(t.id))
+      : teams;
+
+  // Show teams grid in all states
   const showTeams =
-    eventConfig?.status === "waiting" ||
-    eventConfig?.status === "voting" ||
-    eventConfig?.status === "closed" ||
-    eventConfig?.status === "revealed";
+    status === "waiting" ||
+    status === "voting_p1" ||
+    status === "closed_p1" ||
+    status === "revealed_p1" ||
+    status === "voting_p2" ||
+    status === "closed_p2" ||
+    status === "revealed_final";
 
   if (loading) {
     return (
@@ -305,6 +359,59 @@ export default function VotePage() {
     critical: { backgroundColor: "#1A0505" },
     expired: { backgroundColor: "#1A0505" },
   };
+
+  // Status banner text for non-interactive states
+  const getStatusBanner = () => {
+    if (!eventConfig) return null;
+
+    if (status === "waiting") {
+      return {
+        title: "$ waiting_for_vote_start...",
+        desc: "투표가 아직 시작되지 않았습니다. 잠시 기다려 주세요.",
+      };
+    }
+    if (status === "voting_p1" && user.role === "judge") {
+      return {
+        title: "$ phase1_voting_in_progress...",
+        desc: "참가자 투표가 진행 중입니다. 잠시 기다려 주세요.",
+      };
+    }
+    if (status === "voting_p2" && user.role === "participant") {
+      return {
+        title: "$ phase2_voting_in_progress...",
+        desc: "심사위원 투표가 진행 중입니다. 결과를 기다려 주세요.",
+      };
+    }
+    if (status === "closed_p1") {
+      return {
+        title: "$ voting_closed",
+        desc: "1차 투표가 마감되었습니다.",
+      };
+    }
+    if (status === "revealed_p1") {
+      return {
+        title: "$ top10_revealed!",
+        desc: "TOP 10이 공개되었습니다!",
+      };
+    }
+    if (status === "closed_p2") {
+      return {
+        title: "$ voting_closed",
+        desc: "최종 투표가 마감되었습니다.",
+      };
+    }
+    if (status === "revealed_final") {
+      return {
+        title: "$ results_revealed!",
+        desc: "결과가 공개되었습니다. 결과 페이지에서 확인하세요!",
+      };
+    }
+    return null;
+  };
+
+  // Show the status banner when not in active-voting state for this user, and not showing vote success
+  const showStatusBanner = !canUserVote && !voteSuccess;
+  const statusBanner = getStatusBanner();
 
   return (
     <motion.div
@@ -382,9 +489,9 @@ export default function VotePage() {
             </Badge>
           </div>
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
-            {/* Profile edit button - hidden when revealed */}
+            {/* Profile edit button - hidden when revealed_final */}
             {(user.role === "participant" || user.role === "judge") &&
-              eventConfig?.status !== "revealed" && (
+              eventConfig?.status !== "revealed_final" && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -395,10 +502,10 @@ export default function VotePage() {
                   <span className="hidden sm:inline">프로필</span>
                 </Button>
               )}
-            {/* Team edit button - participants only, hidden when revealed */}
+            {/* Team edit button - participants only, hidden when revealed_final */}
             {user.role === "participant" &&
               myTeam &&
-              eventConfig?.status !== "revealed" && (
+              eventConfig?.status !== "revealed_final" && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -440,22 +547,15 @@ export default function VotePage() {
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         {/* Countdown timer */}
         {eventConfig && <CountdownTimer eventConfig={eventConfig} />}
-        {/* Status banner for non-voting states */}
-        {eventConfig && !isVotingActive && !voteSuccess && (
+
+        {/* Status banner for states where this user can't vote */}
+        {eventConfig && showStatusBanner && statusBanner && (
           <div className="rounded-xl border border-border bg-card p-8 text-center space-y-3">
             <p className="font-mono text-2xl text-primary glow-green">
-              {eventConfig.status === "waiting"
-                ? "$ waiting_for_vote_start..."
-                : eventConfig.status === "revealed"
-                  ? "$ results_revealed!"
-                  : "$ voting_closed"}
+              {statusBanner.title}
             </p>
             <p className="text-muted-foreground font-mono text-sm">
-              {eventConfig.status === "waiting"
-                ? "투표가 아직 시작되지 않았습니다. 잠시 기다려 주세요."
-                : eventConfig.status === "revealed"
-                  ? "결과가 공개되었습니다. 결과 페이지에서 확인하세요!"
-                  : "투표가 종료되었습니다."}
+              {statusBanner.desc}
             </p>
           </div>
         )}
@@ -473,8 +573,8 @@ export default function VotePage() {
           </div>
         )}
 
-        {/* Voting progress + selection counter - active voting only */}
-        {isVotingActive && !voteSuccess && (
+        {/* Voting progress + selection counter - active voting only for eligible users */}
+        {canUserVote && !voteSuccess && (
           <>
             <VotingProgress votedCount={votedCount} totalCount={totalCount} />
             <div className="flex items-center justify-between">
@@ -494,16 +594,16 @@ export default function VotePage() {
           </>
         )}
 
-        {/* Team grid - always visible in waiting/voting/closed */}
-        {showTeams && teams.length > 0 && (
+        {/* Team grid - visible across all states */}
+        {showTeams && displayTeams.length > 0 && (
           <>
-            {!isVotingActive && (
+            {!canUserVote && (
               <p className="font-mono text-xs text-muted-foreground">
                 {"// 팀 목록 (읽기 전용)"}
               </p>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...teams]
+              {[...displayTeams]
                 .sort((a, b) => {
                   const aIsOwn = a.id === user.teamId ? -1 : 0;
                   const bIsOwn = b.id === user.teamId ? -1 : 0;
@@ -515,10 +615,10 @@ export default function VotePage() {
                     team={team}
                     isSelected={selectedTeams.includes(team.id)}
                     isOwnTeam={user.teamId === team.id}
-                    onToggle={isVotingActive ? handleToggle : () => {}}
+                    onToggle={canUserVote ? handleToggle : () => {}}
                     onInspect={handleInspect}
                     disabled={
-                      !isVotingActive ||
+                      !canUserVote ||
                       voteSuccess ||
                       (!selectedTeams.includes(team.id) &&
                         selectedTeams.length >= maxVotes)
@@ -529,8 +629,8 @@ export default function VotePage() {
           </>
         )}
 
-        {/* Submit button - voting state only */}
-        {isVotingActive && !voteSuccess && (
+        {/* Submit button - only for eligible voters in active phase */}
+        {canUserVote && !voteSuccess && (
           <div className="flex justify-center pt-4">
             <Button
               size="lg"
@@ -564,7 +664,7 @@ export default function VotePage() {
           inspectTeam ? selectedTeams.includes(inspectTeam.id) : false
         }
         isOwnTeam={inspectTeam ? user.teamId === inspectTeam.id : false}
-        canVote={isVotingActive && !voteSuccess}
+        canVote={canUserVote && !voteSuccess}
         maxReached={selectedTeams.length >= maxVotes}
         onToggleVote={handleToggle}
         members={inspectMembers}

@@ -60,7 +60,10 @@ export function useVotingTimer(eventConfig: EventConfig | null): VotingTimerResu
   }, [eventConfig?.votingDeadline]);
 
   // Not active if no config or not in a timer-eligible status
-  const timerEligible = eventConfig?.status === "voting" || eventConfig?.status === "waiting";
+  const timerEligible =
+    eventConfig?.status === "voting_p1" ||
+    eventConfig?.status === "voting_p2" ||
+    eventConfig?.status === "waiting";
   if (!eventConfig || !timerEligible) {
     return {
       remainingMs: 0,
