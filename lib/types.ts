@@ -1,4 +1,13 @@
-export type EventStatus = "waiting" | "voting" | "closed" | "revealed";
+export type EventStatus =
+  | "waiting"
+  | "voting_p1"
+  | "closed_p1"
+  | "revealed_p1"
+  | "voting_p2"
+  | "closed_p2"
+  | "revealed_final";
+
+export type VotingPhase = "p1" | "p2";
 export type UserRole = "participant" | "judge" | "admin";
 
 export interface EventConfig {
@@ -12,6 +21,9 @@ export interface EventConfig {
   timerDurationSec: number | null;
   title: string;
   createdAt: Date;
+  phase1SelectedTeamIds?: string[];
+  phase1FinalizedAt?: Date;
+  finalRankingOverrides?: string[]; // ordered [1st, 2nd, 3rd] teamIds for manual tie resolution
 }
 
 export interface Team {
@@ -36,6 +48,8 @@ export interface User {
   role: UserRole;
   teamId: string | null;
   hasVoted: boolean;
+  hasVotedP1?: boolean;
+  hasVotedP2?: boolean;
   bio: string | null;
 }
 
@@ -51,6 +65,7 @@ export interface Vote {
   selectedTeams: string[];
   role: UserRole;
   timestamp: Date;
+  phase: VotingPhase;
 }
 
 export interface TeamScore {

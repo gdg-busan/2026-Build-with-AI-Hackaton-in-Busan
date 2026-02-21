@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { EVENT_ID } from "@/lib/constants";
-import type { UserRole } from "@/lib/types";
+import type { UserRole, VotingPhase } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,12 +57,32 @@ export async function POST(req: NextRequest) {
     }
 
     const eventData = eventSnap.data()!;
+    const eventStatus = eventData.status as string;
 
-    // Validate: event must be in "voting" status
-    if (eventData.status !== "voting") {
+    // Detect current phase from event status
+    let phase: VotingPhase;
+    if (eventStatus === "voting_p1") {
+      phase = "p1";
+    } else if (eventStatus === "voting_p2") {
+      phase = "p2";
+    } else {
       return NextResponse.json(
-        { error: "현재 투표 기간이 아닙니다" },
+        { error: "투표 기간이 아닙니다" },
         { status: 400 }
+      );
+    }
+
+    // Phase-based role validation
+    if (phase === "p1" && role !== "participant") {
+      return NextResponse.json(
+        { error: "참가자 투표 기간입니다" },
+        { status: 403 }
+      );
+    }
+    if (phase === "p2" && role !== "judge") {
+      return NextResponse.json(
+        { error: "심사위원 투표 기간입니다" },
+        { status: 403 }
       );
     }
 
@@ -76,14 +96,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate: user hasn't already voted
-    const voteRef = adminDb.doc(`events/${EVENT_ID}/votes/${uid}`);
-    const voteSnap = await voteRef.get();
-    if (voteSnap.exists) {
-      return NextResponse.json(
-        { error: "이미 투표하셨습니다" },
-        { status: 409 }
+    // Phase 2: selectedTeams must be subset of phase1SelectedTeamIds
+    if (phase === "p2") {
+      const phase1SelectedTeamIds: string[] =
+        eventData.phase1SelectedTeamIds ?? [];
+      const invalidTeams = selectedTeams.filter(
+        (teamId) => !phase1SelectedTeamIds.includes(teamId)
       );
+      if (invalidTeams.length > 0) {
+        return NextResponse.json(
+          { error: "1차 투표에서 선정된 팀에만 투표할 수 있습니다" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Check duplicate vote using phase-specific field
+    const userRef = adminDb.doc(`events/${EVENT_ID}/users/${uid}`);
+    const userSnap = await userRef.get();
+    if (userSnap.exists) {
+      const userData = userSnap.data()!;
+      const hasVotedField = phase === "p1" ? "hasVotedP1" : "hasVotedP2";
+      if (userData[hasVotedField] === true) {
+        return NextResponse.json(
+          { error: "이미 투표하셨습니다" },
+          { status: 409 }
+        );
+      }
     }
 
     // Validate: selectedTeams doesn't include user's own team
@@ -111,17 +150,22 @@ export async function POST(req: NextRequest) {
     // Atomic batch write
     const batch = adminDb.batch();
 
-    // Write vote document
+    // Vote document ID is phase-prefixed
+    const voteDocId = `${phase}_${uid}`;
+    const voteRef = adminDb.doc(`events/${EVENT_ID}/votes/${voteDocId}`);
+
+    // Write vote document with phase field
     batch.set(voteRef, {
       voterId: uid,
       selectedTeams,
       role,
       timestamp: new Date(),
+      phase,
     });
 
-    // Increment vote counts on each team
+    // Increment vote counts on each team based on phase
     const voteField =
-      role === "judge" ? "judgeVoteCount" : "participantVoteCount";
+      phase === "p2" ? "judgeVoteCount" : "participantVoteCount";
     for (const teamId of selectedTeams) {
       const teamRef = adminDb.doc(`events/${EVENT_ID}/teams/${teamId}`);
       batch.update(teamRef, {
@@ -129,9 +173,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Update user's hasVoted flag
-    const userRef = adminDb.doc(`events/${EVENT_ID}/users/${uid}`);
-    batch.update(userRef, { hasVoted: true });
+    // Update user's phase-specific hasVoted flag and legacy hasVoted for backwards compat
+    const hasVotedField = phase === "p1" ? "hasVotedP1" : "hasVotedP2";
+    batch.update(userRef, {
+      [hasVotedField]: true,
+      hasVoted: true,
+    });
 
     await batch.commit();
 

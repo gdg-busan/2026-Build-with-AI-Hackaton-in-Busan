@@ -15,7 +15,7 @@ import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { calculateScores, getTop10 } from "@/lib/scoring";
+import { calculateScores, getTop10, calculateFinalScores, detectFinalTies } from "@/lib/scoring";
 import { TEAM_EMOJIS, EVENT_ID } from "@/lib/constants";
 import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatRoom, Announcement } from "@/lib/types";
 import { MISSIONS } from "@/lib/missions";
@@ -27,16 +27,22 @@ type TabType = "setup" | "event" | "teams" | "users" | "monitor" | "chat" | "mis
 
 const STATUS_COLORS: Record<EventStatus, string> = {
   waiting: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-  voting: "bg-green-500/20 text-[#00FF88] border-[#00FF88]/30",
-  closed: "bg-red-500/20 text-red-400 border-red-500/30",
-  revealed: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  voting_p1: "bg-green-500/20 text-[#00FF88] border-[#00FF88]/30",
+  closed_p1: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+  revealed_p1: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  voting_p2: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  closed_p2: "bg-red-500/20 text-red-400 border-red-500/30",
+  revealed_final: "bg-purple-500/20 text-purple-400 border-purple-500/30",
 };
 
 const STATUS_LABELS: Record<EventStatus, string> = {
   waiting: "대기중",
-  voting: "투표중",
-  closed: "마감",
-  revealed: "공개됨",
+  voting_p1: "1차 투표중",
+  closed_p1: "1차 마감",
+  revealed_p1: "TOP 10 공개",
+  voting_p2: "2차 투표중",
+  closed_p2: "2차 마감",
+  revealed_final: "최종 발표",
 };
 
 
@@ -96,6 +102,19 @@ export default function AdminPage() {
     expiresMinutes: 60,
   });
 
+  // Phase 1 finalization state
+  type TiedTeam = { id: string; name: string; emoji: string; participantVoteCount: number };
+  const [phase1Result, setPhase1Result] = useState<{
+    selectedTeamIds: string[];
+    tiedTeams: TiedTeam[] | null;
+  } | null>(null);
+  const [phase1ManualSelection, setPhase1ManualSelection] = useState<string[]>([]);
+  const [finalizingPhase1, setFinalizingPhase1] = useState(false);
+
+  // Final tie resolution state
+  const [finalTieRanking, setFinalTieRanking] = useState<string[]>([]);
+  const [resolvingFinalTies, setResolvingFinalTies] = useState(false);
+
   // Loading states
   const [submitting, setSubmitting] = useState(false);
   const [customMinutes, setCustomMinutes] = useState(10);
@@ -129,6 +148,9 @@ export default function AdminPage() {
           createdAt: d.createdAt?.toDate?.() || new Date(),
           autoCloseEnabled: d.autoCloseEnabled ?? false,
           timerDurationSec: d.timerDurationSec ?? null,
+          phase1SelectedTeamIds: d.phase1SelectedTeamIds ?? undefined,
+          phase1FinalizedAt: d.phase1FinalizedAt?.toDate?.() ?? undefined,
+          finalRankingOverrides: d.finalRankingOverrides ?? undefined,
         });
         setConfigForm({
           judgeWeight: d.judgeWeight,
@@ -273,8 +295,9 @@ export default function AdminPage() {
 
   // Auto-advance: when timer expires and autoCloseEnabled, advance to next status
   const nextStatusMap: Partial<Record<EventStatus, { status: EventStatus; message: string }>> = {
-    waiting: { status: "voting", message: "타이머 만료로 투표가 시작되었습니다." },
-    voting: { status: "closed", message: "타이머 만료로 투표가 자동 마감되었습니다." },
+    waiting: { status: "voting_p1", message: "타이머 만료로 1차 투표가 시작되었습니다." },
+    voting_p1: { status: "closed_p1", message: "타이머 만료로 1차 투표가 자동 마감되었습니다." },
+    voting_p2: { status: "closed_p2", message: "타이머 만료로 2차 투표가 자동 마감되었습니다." },
   };
 
   useEffect(() => {
@@ -535,6 +558,74 @@ export default function AdminPage() {
     }
   };
 
+  const handleFinalizePhase1 = async () => {
+    setFinalizingPhase1(true);
+    try {
+      const result = await callAdminApi("finalizePhase1", {});
+      setPhase1Result({
+        selectedTeamIds: result.selectedTeamIds,
+        tiedTeams: result.tiedTeams ?? null,
+      });
+      if (!result.tiedTeams || result.tiedTeams.length === 0) {
+        toast.success("TOP 10이 자동 선정되었습니다.");
+      } else {
+        toast.warning("동점 팀이 있습니다. 수동으로 선정해주세요.");
+        setPhase1ManualSelection(result.selectedTeamIds);
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setFinalizingPhase1(false);
+    }
+  };
+
+  const handleResolvePhase1Ties = async () => {
+    const requiredCount = Math.min(10, teams.length);
+    if (phase1ManualSelection.length !== requiredCount) {
+      toast.error(`정확히 ${requiredCount}개 팀을 선택해야 합니다.`);
+      return;
+    }
+    setFinalizingPhase1(true);
+    try {
+      await callAdminApi("resolvePhase1Ties", { selectedTeamIds: phase1ManualSelection });
+      setPhase1Result((prev) => prev ? { ...prev, tiedTeams: null, selectedTeamIds: phase1ManualSelection } : null);
+      toast.success("동점 처리가 완료되었습니다. TOP 10이 확정되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setFinalizingPhase1(false);
+    }
+  };
+
+  const handleResolveFinalTies = async () => {
+    if (finalTieRanking.length !== 3) {
+      toast.error("1위, 2위, 3위를 모두 선택해주세요.");
+      return;
+    }
+    setResolvingFinalTies(true);
+    try {
+      await callAdminApi("resolveFinalTies", { rankedTeamIds: finalTieRanking });
+      toast.success("최종 순위가 확정되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setResolvingFinalTies(false);
+    }
+  };
+
+  const handleResetPhase2Votes = async () => {
+    if (!confirm("2차 투표를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
+    setSubmitting(true);
+    try {
+      await callAdminApi("resetPhase2Votes", {});
+      toast.success("2차 투표가 초기화되었습니다.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Auto-fetch missions when switching to missions tab
   useEffect(() => {
     if (activeTab === "missions" && missionUsers.length === 0) {
@@ -648,7 +739,7 @@ export default function AdminPage() {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(["waiting", "voting", "closed", "revealed"] as EventStatus[]).map((status) => (
+                    {(["waiting", "voting_p1", "closed_p1", "revealed_p1", "voting_p2", "closed_p2", "revealed_final"] as EventStatus[]).map((status) => (
                       <Button
                         key={status}
                         onClick={() => handleStatusChange(status)}
@@ -665,7 +756,7 @@ export default function AdminPage() {
                     ))}
                   </div>
                   <div className="text-gray-500 font-mono text-xs mt-2">
-                    원하는 상태를 클릭하여 자유롭게 변경할 수 있습니다.
+                    상태는 순서대로만 진행 가능합니다 (1단계씩 전진).
                   </div>
                 </div>
               ) : (
@@ -691,6 +782,286 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+
+            {/* TOP 10 선정 Section - shown when status is closed_p1 */}
+            {eventConfig && (eventConfig.status === "closed_p1" || eventConfig.phase1SelectedTeamIds) && (
+              <div className="bg-[#1A2235] rounded-xl p-6 border border-[#4DAFFF]/20">
+                <h2 className="text-[#4DAFFF] font-mono font-semibold mb-4">TOP 10 선정</h2>
+
+                {/* Already finalized */}
+                {eventConfig.phase1SelectedTeamIds && eventConfig.phase1SelectedTeamIds.length > 0 && !phase1Result?.tiedTeams && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-[#00FF88] font-mono text-sm">TOP {eventConfig.phase1SelectedTeamIds.length} 선정 완료</span>
+                      {eventConfig.phase1FinalizedAt && (
+                        <span className="text-gray-500 font-mono text-xs">
+                          ({eventConfig.phase1FinalizedAt instanceof Date
+                            ? eventConfig.phase1FinalizedAt.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+                            : ""})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {eventConfig.phase1SelectedTeamIds.map((teamId) => {
+                        const team = teams.find((t) => t.id === teamId);
+                        return team ? (
+                          <span key={teamId} className="px-3 py-1 bg-[#4DAFFF]/10 border border-[#4DAFFF]/30 rounded-lg font-mono text-xs text-[#4DAFFF]">
+                            {team.emoji} {team.name}
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                    {eventConfig.status === "closed_p1" && (
+                      <Button
+                        onClick={handleFinalizePhase1}
+                        disabled={finalizingPhase1}
+                        variant="outline"
+                        className="font-mono text-xs border-[#4DAFFF]/30 text-[#4DAFFF] hover:bg-[#4DAFFF]/10 mt-2"
+                      >
+                        {finalizingPhase1 ? "처리 중..." : "TOP 10 재선정"}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Not yet finalized */}
+                {eventConfig.status === "closed_p1" && (!eventConfig.phase1SelectedTeamIds || eventConfig.phase1SelectedTeamIds.length === 0) && !phase1Result && (
+                  <div className="space-y-3">
+                    <p className="text-gray-400 font-mono text-sm">
+                      1차 투표(참가자 투표)를 기반으로 TOP 10 팀을 선정합니다.
+                    </p>
+                    <Button
+                      onClick={handleFinalizePhase1}
+                      disabled={finalizingPhase1}
+                      className="font-mono bg-[#4DAFFF] text-[#0A0E1A] hover:bg-[#4DAFFF]/90"
+                    >
+                      {finalizingPhase1 ? "선정 중..." : "TOP 10 자동 선정"}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Tie resolution UI */}
+                {phase1Result?.tiedTeams && phase1Result.tiedTeams.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                      <p className="text-yellow-400 font-mono text-sm font-semibold mb-1">동점 발생!</p>
+                      <p className="text-yellow-400/70 font-mono text-xs">
+                        아래 팀들이 동점입니다. 총 {Math.min(10, teams.length)}개 팀을 수동으로 선택해주세요.
+                        (현재 확실히 선정된 팀: {phase1Result.selectedTeamIds.length}개)
+                      </p>
+                    </div>
+
+                    {/* Already-selected teams (above cutoff) */}
+                    {phase1Result.selectedTeamIds.length > 0 && (
+                      <div>
+                        <p className="text-gray-400 font-mono text-xs mb-2">확정 선정 팀:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {phase1Result.selectedTeamIds.map((teamId) => {
+                            const team = teams.find((t) => t.id === teamId);
+                            return team ? (
+                              <span key={teamId} className="px-3 py-1 bg-[#00FF88]/10 border border-[#00FF88]/30 rounded-lg font-mono text-xs text-[#00FF88]">
+                                {team.emoji} {team.name}
+                              </span>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tied teams checkboxes */}
+                    <div>
+                      <p className="text-gray-400 font-mono text-xs mb-2">
+                        동점 팀 ({phase1Result.tiedTeams.length}개) - 추가 선택:
+                      </p>
+                      <div className="space-y-2">
+                        {phase1Result.tiedTeams.map((t) => {
+                          const isAutoSelected = phase1Result.selectedTeamIds.includes(t.id);
+                          const isManualSelected = phase1ManualSelection.includes(t.id);
+                          return (
+                            <label key={t.id} className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isAutoSelected || isManualSelected}
+                                disabled={isAutoSelected}
+                                onChange={(e) => {
+                                  if (isAutoSelected) return;
+                                  setPhase1ManualSelection((prev) =>
+                                    e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)
+                                  );
+                                }}
+                                className="w-4 h-4 accent-[#4DAFFF]"
+                              />
+                              <span className="font-mono text-sm text-white">
+                                {t.emoji} {t.name}
+                              </span>
+                              <span className="text-gray-500 font-mono text-xs">
+                                ({t.participantVoteCount}표)
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-400 font-mono text-xs">
+                        선택: {phase1ManualSelection.length + phase1Result.selectedTeamIds.filter(id => !phase1ManualSelection.includes(id)).length} / {Math.min(10, teams.length)}
+                      </span>
+                      <Button
+                        onClick={handleResolvePhase1Ties}
+                        disabled={finalizingPhase1}
+                        className="font-mono bg-[#4DAFFF] text-[#0A0E1A] hover:bg-[#4DAFFF]/90"
+                      >
+                        {finalizingPhase1 ? "처리 중..." : "동점 처리 확정"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Phase 1 선정 팀 info panel - shown when phase1SelectedTeamIds exists */}
+            {eventConfig && eventConfig.phase1SelectedTeamIds && eventConfig.phase1SelectedTeamIds.length > 0 && eventConfig.status !== "closed_p1" && (
+              <div className="bg-[#1A2235] rounded-xl p-4 border border-[#4DAFFF]/10">
+                <h3 className="text-[#4DAFFF] font-mono text-sm font-semibold mb-3">Phase 1 선정 팀 (2차 투표 대상)</h3>
+                <div className="flex flex-wrap gap-2">
+                  {eventConfig.phase1SelectedTeamIds.map((teamId) => {
+                    const team = teams.find((t) => t.id === teamId);
+                    return team ? (
+                      <span key={teamId} className="px-2 py-1 bg-[#4DAFFF]/10 border border-[#4DAFFF]/20 rounded font-mono text-xs text-[#4DAFFF]">
+                        {team.emoji} {team.name}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Final Tie Resolution - shown when closed_p2 and ties detected */}
+            {eventConfig && (eventConfig.status === "closed_p2" || eventConfig.status === "revealed_final") && eventConfig.phase1SelectedTeamIds && (() => {
+              const finalScores = calculateFinalScores(
+                teams,
+                eventConfig.judgeWeight,
+                eventConfig.participantWeight,
+                eventConfig.phase1SelectedTeamIds!
+              );
+              const tiedTeams = detectFinalTies(finalScores);
+              const hasOverrides = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length === 3;
+
+              if (!tiedTeams && !hasOverrides) return null;
+
+              return (
+                <div className="bg-[#1A2235] rounded-xl p-6 border border-[#FF6B35]/20">
+                  <h2 className="text-[#FF6B35] font-mono font-semibold mb-4">최종 순위 결정</h2>
+
+                  {hasOverrides ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-[#00FF88] font-mono text-sm">순위 확정 완료</span>
+                      </div>
+                      <div className="space-y-2">
+                        {eventConfig.finalRankingOverrides!.map((teamId, i) => {
+                          const team = teams.find((t) => t.id === teamId);
+                          const score = finalScores.find((s) => s.teamId === teamId);
+                          const medals = ["🥇", "🥈", "🥉"];
+                          return team ? (
+                            <div key={teamId} className="flex items-center gap-3 p-2 rounded-lg bg-[#0A0E1A]/50">
+                              <span className="text-lg">{medals[i]}</span>
+                              <span className="font-mono text-sm text-white">{team.emoji} {team.name}</span>
+                              <span className="text-gray-500 font-mono text-xs ml-auto">{score?.finalScore.toFixed(2)}점</span>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                      {eventConfig.status === "closed_p2" && (
+                        <Button
+                          onClick={async () => {
+                            setFinalTieRanking([]);
+                            try {
+                              await callAdminApi("resolveFinalTies", { rankedTeamIds: [] });
+                              toast.success("순위가 초기화되었습니다.");
+                            } catch (e) {
+                              toast.error((e as Error).message);
+                            }
+                          }}
+                          variant="outline"
+                          className="font-mono text-xs border-[#FF6B35]/30 text-[#FF6B35] hover:bg-[#FF6B35]/10 mt-2"
+                        >
+                          순위 재설정
+                        </Button>
+                      )}
+                    </div>
+                  ) : tiedTeams ? (
+                    <div className="space-y-4">
+                      <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                        <p className="text-yellow-400 font-mono text-sm font-semibold mb-1">동점 발생! ({finalScores.length}팀 후보)</p>
+                        <p className="text-yellow-400/70 font-mono text-xs">
+                          동점인 팀이 있습니다. 후보 {finalScores.length}팀 중 1위~3위를 직접 지정해주세요.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-gray-400 font-mono text-xs mb-1">TOP 3 팀 (동점 포함):</p>
+                        {finalScores.map((score) => {
+                          const isTied = tiedTeams.some((t) => t.teamId === score.teamId);
+                          return (
+                            <div key={score.teamId} className={`flex items-center gap-3 p-2 rounded-lg ${isTied ? "bg-yellow-500/10 border border-yellow-500/20" : "bg-[#0A0E1A]/50"}`}>
+                              <span className="text-lg">{score.emoji}</span>
+                              <span className="font-mono text-sm text-white">{score.teamName}</span>
+                              <span className={`font-mono text-xs ${isTied ? "text-yellow-400" : "text-gray-500"}`}>
+                                {score.finalScore.toFixed(2)}점 {isTied && "(동점)"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-gray-400 font-mono text-xs">순위 지정 (1위 → 2위 → 3위 순서로 선택):</p>
+                        {[0, 1, 2].map((rank) => {
+                          const medals = ["🥇 1위", "🥈 2위", "🥉 3위"];
+                          return (
+                            <div key={rank} className="flex items-center gap-3">
+                              <span className="font-mono text-sm w-12 text-right">{medals[rank]}</span>
+                              <select
+                                className="flex-1 bg-[#0A0E1A] border border-gray-600 rounded-lg px-3 py-2 font-mono text-sm text-white"
+                                value={finalTieRanking[rank] ?? ""}
+                                onChange={(e) => {
+                                  setFinalTieRanking((prev) => {
+                                    const next = [...prev];
+                                    next[rank] = e.target.value;
+                                    return next.filter(Boolean);
+                                  });
+                                }}
+                              >
+                                <option value="">선택하세요</option>
+                                {finalScores.map((s) => (
+                                  <option
+                                    key={s.teamId}
+                                    value={s.teamId}
+                                    disabled={finalTieRanking.includes(s.teamId) && finalTieRanking[rank] !== s.teamId}
+                                  >
+                                    {s.emoji} {s.teamName} ({s.finalScore.toFixed(2)}점)
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <Button
+                        onClick={handleResolveFinalTies}
+                        disabled={resolvingFinalTies || finalTieRanking.length !== 3}
+                        className="font-mono bg-[#FF6B35] text-white hover:bg-[#FF6B35]/90"
+                      >
+                        {resolvingFinalTies ? "처리 중..." : "최종 순위 확정"}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })()}
 
             {/* Timer Control Card */}
             <div className="bg-[#1A2235] rounded-xl p-6 border border-[#00FF88]/10">
@@ -1012,7 +1383,7 @@ export default function AdminPage() {
             {/* Danger Zone */}
             <div className="bg-red-950/20 rounded-xl p-6 border border-red-500/20">
               <h2 className="text-red-400 font-mono font-semibold mb-4">위험 구역</h2>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <Button
                   variant="destructive"
                   onClick={handleResetVotes}
@@ -1020,6 +1391,14 @@ export default function AdminPage() {
                   className="font-mono"
                 >
                   모든 투표 초기화
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleResetPhase2Votes}
+                  disabled={submitting}
+                  className="font-mono"
+                >
+                  2차 투표만 초기화
                 </Button>
                 <Button
                   variant="destructive"
@@ -1457,15 +1836,59 @@ export default function AdminPage() {
                   }}
                 />
               </div>
-              <div className="mt-3 flex gap-6 text-xs font-mono text-gray-400">
-                <span>
-                  참가자: {users.filter((u) => u.role === "participant" && u.hasVoted).length} /{" "}
-                  {users.filter((u) => u.role === "participant").length}
-                </span>
-                <span>
-                  심사위원: {users.filter((u) => u.role === "judge" && u.hasVoted).length} /{" "}
-                  {users.filter((u) => u.role === "judge").length}
-                </span>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* P1 투표 - participants */}
+                <div className="p-3 rounded-lg bg-[#0A0E1A]/50">
+                  <div className="text-[#00FF88] font-mono text-xs font-semibold mb-2">P1 투표 (참가자)</div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-white font-mono text-lg font-bold">
+                      {users.filter((u) => u.role === "participant" && (u.hasVotedP1 ?? u.hasVoted)).length}
+                      {" / "}
+                      {users.filter((u) => u.role === "participant").length}
+                    </span>
+                    <span className="text-[#00FF88] font-mono text-sm">
+                      {users.filter((u) => u.role === "participant").length > 0
+                        ? Math.round((users.filter((u) => u.role === "participant" && (u.hasVotedP1 ?? u.hasVoted)).length / users.filter((u) => u.role === "participant").length) * 100)
+                        : 0}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-[#1A2235] rounded-full h-2 mt-2 overflow-hidden">
+                    <div
+                      className="h-full bg-[#00FF88]/70 rounded-full transition-all duration-500"
+                      style={{
+                        width: `${users.filter((u) => u.role === "participant").length > 0
+                          ? (users.filter((u) => u.role === "participant" && (u.hasVotedP1 ?? u.hasVoted)).length / users.filter((u) => u.role === "participant").length) * 100
+                          : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                {/* P2 투표 - judges */}
+                <div className="p-3 rounded-lg bg-[#0A0E1A]/50">
+                  <div className="text-[#FF6B35] font-mono text-xs font-semibold mb-2">P2 투표 (심사위원)</div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-white font-mono text-lg font-bold">
+                      {users.filter((u) => u.role === "judge" && (u.hasVotedP2 ?? u.hasVoted)).length}
+                      {" / "}
+                      {users.filter((u) => u.role === "judge").length}
+                    </span>
+                    <span className="text-[#FF6B35] font-mono text-sm">
+                      {users.filter((u) => u.role === "judge").length > 0
+                        ? Math.round((users.filter((u) => u.role === "judge" && (u.hasVotedP2 ?? u.hasVoted)).length / users.filter((u) => u.role === "judge").length) * 100)
+                        : 0}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-[#1A2235] rounded-full h-2 mt-2 overflow-hidden">
+                    <div
+                      className="h-full bg-[#FF6B35]/70 rounded-full transition-all duration-500"
+                      style={{
+                        width: `${users.filter((u) => u.role === "judge").length > 0
+                          ? (users.filter((u) => u.role === "judge" && (u.hasVotedP2 ?? u.hasVoted)).length / users.filter((u) => u.role === "judge").length) * 100
+                          : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

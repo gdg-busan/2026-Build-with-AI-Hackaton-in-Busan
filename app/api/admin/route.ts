@@ -2,7 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { generateUniqueCode, EVENT_ID } from "@/lib/constants";
-import type { UserRole } from "@/lib/types";
+import type { EventStatus, UserRole } from "@/lib/types";
+import { getPhase1Results, calculateFinalScores, detectFinalTies } from "@/lib/scoring";
+
+const VALID_STATUSES: EventStatus[] = [
+  "waiting",
+  "voting_p1",
+  "closed_p1",
+  "revealed_p1",
+  "voting_p2",
+  "closed_p2",
+  "revealed_final",
+];
+
+const STATUS_ORDER: Record<EventStatus, number> = {
+  waiting: 0,
+  voting_p1: 1,
+  closed_p1: 2,
+  revealed_p1: 3,
+  voting_p2: 4,
+  closed_p2: 5,
+  revealed_final: 6,
+};
+
+// Statuses that require phase1SelectedTeamIds to be set
+const REQUIRES_PHASE1_SELECTION: EventStatus[] = [
+  "voting_p2",
+  "closed_p2",
+  "revealed_final",
+];
 
 const eventRef = () => adminDb.collection("events").doc(EVENT_ID);
 const teamsCol = () => eventRef().collection("teams");
@@ -63,7 +91,76 @@ export async function POST(request: NextRequest) {
       }
 
       case "updateEventStatus": {
-        const { status } = data;
+        const { status } = data as { status: EventStatus };
+
+        if (!VALID_STATUSES.includes(status)) {
+          return NextResponse.json(
+            { error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` },
+            { status: 400 }
+          );
+        }
+
+        const eventSnap = await eventRef().get();
+        const eventData = eventSnap.data();
+        const currentStatus = (eventData?.status ?? "waiting") as EventStatus;
+
+        // Prevent skipping phases: new status order must be at most 1 step ahead
+        const currentOrder = STATUS_ORDER[currentStatus];
+        const newOrder = STATUS_ORDER[status];
+        if (newOrder > currentOrder + 1) {
+          return NextResponse.json(
+            {
+              error: `Cannot skip phases. Current status is "${currentStatus}", cannot jump to "${status}".`,
+            },
+            { status: 400 }
+          );
+        }
+
+        // Require phase1SelectedTeamIds for voting_p2 and beyond
+        if (REQUIRES_PHASE1_SELECTION.includes(status)) {
+          const phase1SelectedTeamIds = eventData?.phase1SelectedTeamIds;
+          if (!phase1SelectedTeamIds || phase1SelectedTeamIds.length === 0) {
+            return NextResponse.json(
+              {
+                error: `Cannot transition to "${status}" without phase1SelectedTeamIds being set. Run finalizePhase1 first.`,
+              },
+              { status: 400 }
+            );
+          }
+        }
+
+        // Block revealed_final if there are unresolved ties in top 3
+        if (status === "revealed_final") {
+          const phase1SelectedTeamIds = eventData?.phase1SelectedTeamIds ?? [];
+          const finalRankingOverrides = eventData?.finalRankingOverrides;
+          const teamsSnap = await teamsCol().get();
+          const allTeams = teamsSnap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+          })) as import("@/lib/types").Team[];
+          const finalScores = calculateFinalScores(
+            allTeams,
+            eventData?.judgeWeight ?? 0.8,
+            eventData?.participantWeight ?? 0.2,
+            phase1SelectedTeamIds
+          );
+          const tiedTeams = detectFinalTies(finalScores);
+          if (tiedTeams && tiedTeams.length > 0 && (!finalRankingOverrides || finalRankingOverrides.length === 0)) {
+            return NextResponse.json(
+              {
+                error: "최종 순위에 동점 팀이 있습니다. resolveFinalTies로 순위를 먼저 결정해주세요.",
+                tiedTeams: tiedTeams.map((t) => ({
+                  teamId: t.teamId,
+                  teamName: t.teamName,
+                  emoji: t.emoji,
+                  finalScore: t.finalScore,
+                })),
+              },
+              { status: 400 }
+            );
+          }
+        }
+
         await eventRef().update({ status });
         return NextResponse.json({ success: true });
       }
@@ -179,6 +276,111 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
+      case "finalizePhase1": {
+        const teamsSnap = await teamsCol().get();
+        const teams = teamsSnap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as import("@/lib/types").Team[];
+
+        const { selectedTeamIds, tiedTeams } = getPhase1Results(teams, 10);
+
+        if (tiedTeams && tiedTeams.length > 0) {
+          // There's a tie — return tie info without storing, admin must resolve manually
+          return NextResponse.json({
+            success: true,
+            selectedTeamIds,
+            tiedTeams: tiedTeams.map((t) => ({
+              id: t.id,
+              name: t.name,
+              emoji: t.emoji,
+              participantVoteCount: t.participantVoteCount,
+            })),
+          });
+        }
+
+        // No tie — store directly
+        await eventRef().update({
+          phase1SelectedTeamIds: selectedTeamIds,
+          phase1FinalizedAt: FieldValue.serverTimestamp(),
+        });
+
+        return NextResponse.json({ success: true, selectedTeamIds, tiedTeams: null });
+      }
+
+      case "resolvePhase1Ties": {
+        const { selectedTeamIds } = data as { selectedTeamIds: string[] };
+
+        if (!Array.isArray(selectedTeamIds)) {
+          return NextResponse.json(
+            { error: "selectedTeamIds must be an array" },
+            { status: 400 }
+          );
+        }
+
+        // Count total teams for validation
+        const totalTeamsSnap = await teamsCol().get();
+        const totalTeamCount = totalTeamsSnap.size;
+        const requiredCount = Math.min(10, totalTeamCount);
+
+        if (selectedTeamIds.length !== requiredCount) {
+          return NextResponse.json(
+            {
+              error: `Must select exactly ${requiredCount} team(s). Got ${selectedTeamIds.length}.`,
+            },
+            { status: 400 }
+          );
+        }
+
+        await eventRef().update({
+          phase1SelectedTeamIds: selectedTeamIds,
+          phase1FinalizedAt: FieldValue.serverTimestamp(),
+        });
+
+        return NextResponse.json({ success: true, selectedTeamIds });
+      }
+
+      case "resolveFinalTies": {
+        const { rankedTeamIds } = data as { rankedTeamIds: string[] };
+
+        if (!Array.isArray(rankedTeamIds)) {
+          return NextResponse.json(
+            { error: "rankedTeamIds must be an array" },
+            { status: 400 }
+          );
+        }
+
+        // Allow empty array to reset overrides
+        if (rankedTeamIds.length === 0) {
+          await eventRef().update({ finalRankingOverrides: FieldValue.delete() });
+          return NextResponse.json({ success: true, rankedTeamIds: [] });
+        }
+
+        if (rankedTeamIds.length !== 3) {
+          return NextResponse.json(
+            { error: "rankedTeamIds must be exactly 3 team IDs (1st, 2nd, 3rd) or empty to reset" },
+            { status: 400 }
+          );
+        }
+
+        // Validate all teams exist and are in phase1SelectedTeamIds
+        const eventSnap2 = await eventRef().get();
+        const phase1Ids = eventSnap2.data()?.phase1SelectedTeamIds ?? [];
+        const invalidIds = rankedTeamIds.filter((id) => !phase1Ids.includes(id));
+        if (invalidIds.length > 0) {
+          return NextResponse.json(
+            { error: `팀이 Phase 1 선정 목록에 없습니다: ${invalidIds.join(", ")}` },
+            { status: 400 }
+          );
+        }
+
+        await eventRef().update({
+          finalRankingOverrides: rankedTeamIds,
+        });
+
+        return NextResponse.json({ success: true, rankedTeamIds });
+      }
+
       case "resetVotes": {
         // Delete all vote documents
         const votesSnap = await votesCol().get();
@@ -198,12 +400,54 @@ export async function POST(request: NextRequest) {
           await batch.commit();
         }
 
-        // Reset user hasVoted flags
+        // Reset user hasVoted flags (including phase-specific flags)
         const usersSnap = await usersCol().get();
         if (!usersSnap.empty) {
           const batch = adminDb.batch();
           usersSnap.docs.forEach((doc) =>
-            batch.update(doc.ref, { hasVoted: false })
+            batch.update(doc.ref, { hasVoted: false, hasVotedP1: false, hasVotedP2: false })
+          );
+          await batch.commit();
+        }
+
+        return NextResponse.json({ success: true });
+      }
+
+      case "resetPhase2Votes": {
+        // Delete only Phase 2 vote documents, preserving Phase 1 data
+        const p2VotesSnap = await votesCol().where("phase", "==", "p2").get();
+        if (!p2VotesSnap.empty) {
+          const batch = adminDb.batch();
+          p2VotesSnap.docs.forEach((doc) => batch.delete(doc.ref));
+          await batch.commit();
+        }
+
+        // Reset team judge vote counts (Phase 2 is judge voting)
+        // We recalculate judgeVoteCount from remaining p1 judge votes
+        const remainingJudgeVotes = await votesCol().where("phase", "==", "p1").where("role", "==", "judge").get();
+        const judgeCountMap: Record<string, number> = {};
+        remainingJudgeVotes.docs.forEach((doc) => {
+          const { selectedTeams } = doc.data() as { selectedTeams: string[] };
+          selectedTeams.forEach((teamId) => {
+            judgeCountMap[teamId] = (judgeCountMap[teamId] ?? 0) + 1;
+          });
+        });
+
+        const teamsSnapP2 = await teamsCol().get();
+        if (!teamsSnapP2.empty) {
+          const batch = adminDb.batch();
+          teamsSnapP2.docs.forEach((doc) =>
+            batch.update(doc.ref, { judgeVoteCount: judgeCountMap[doc.id] ?? 0 })
+          );
+          await batch.commit();
+        }
+
+        // Reset only hasVotedP2 on users
+        const usersSnapP2 = await usersCol().get();
+        if (!usersSnapP2.empty) {
+          const batch = adminDb.batch();
+          usersSnapP2.docs.forEach((doc) =>
+            batch.update(doc.ref, { hasVotedP2: false })
           );
           await batch.commit();
         }

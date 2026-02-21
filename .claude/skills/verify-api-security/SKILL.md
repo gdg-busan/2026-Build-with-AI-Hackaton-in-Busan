@@ -8,6 +8,8 @@ description: API 라우트 보안 패턴 검증. API 라우트 추가/수정 후
 1. 모든 보호된 API 라우트가 Firebase ID 토큰을 검증하는지 확인
 2. Admin 전용 API가 role 체크를 수행하는지 확인
 3. 투표 API가 부정 방지 로직(자기 팀 제외, 중복 투표 방지)을 포함하는지 확인
+4. 투표 API가 Phase-aware 역할 검증(P1=participant, P2=judge)을 수행하는지 확인
+5. Admin API의 새 action들이 입력 검증을 포함하는지 확인
 
 ## When to Run
 
@@ -88,6 +90,50 @@ grep -n "votes\|exists\|request.auth.uid" firebase/firestore.rules
 **PASS:** votes 문서 ID = auth UID 강제 및 exists 체크 존재.
 **FAIL:** votes 보안 규칙 누락.
 
+### Step 6: Phase-aware 역할 검증 확인
+
+**검사:** 투표 API에서 P1은 participant만, P2는 judge만 투표 가능해야 함.
+
+```bash
+grep -n "phase.*p1.*participant\|phase.*p2.*judge\|role.*participant\|role.*judge" app/api/vote/route.ts
+```
+
+**PASS:** P1=participant, P2=judge 역할 검증 로직이 존재.
+**FAIL:** phase별 역할 검증 누락 → 비인가 역할이 해당 phase에서 투표 가능.
+
+### Step 7: Phase-specific 중복 투표 방지 확인
+
+**검사:** 투표 API에서 `hasVotedP1`/`hasVotedP2` 각각을 체크해야 함.
+
+```bash
+grep -n "hasVotedP1\|hasVotedP2" app/api/vote/route.ts
+```
+
+**PASS:** phase별 hasVoted 플래그 체크가 존재.
+**FAIL:** phase별 중복 투표 방지 누락 → P1에서 투표한 사용자가 P1에 재투표 가능.
+
+### Step 8: Admin API 새 action 입력 검증 확인
+
+**검사:** `resolveFinalTies`, `finalizePhase1`, `resolvePhase1Ties` action들이 입력 검증을 수행해야 함.
+
+```bash
+grep -n "resolveFinalTies\|finalizePhase1\|resolvePhase1Ties" app/api/admin/route.ts
+```
+
+**PASS:** 모든 새 action에서 입력 배열 검증 및 팀 존재 확인 로직이 존재.
+**FAIL:** 입력 검증 누락 → 잘못된 teamId로 데이터 오염 가능.
+
+### Step 9: revealed_final 전환 시 동점 차단 확인
+
+**검사:** `revealed_final` 상태 전환 시 동점이 있으면 `finalRankingOverrides` 없이 차단되어야 함.
+
+```bash
+grep -n "revealed_final\|finalRankingOverrides\|detectFinalTies" app/api/admin/route.ts
+```
+
+**PASS:** 동점 존재 + overrides 미설정 시 400 에러 반환.
+**FAIL:** 동점 미해결 상태로 결과 공개 가능 → 임의 순위 노출.
+
 ## Output Format
 
 | 검사 | 결과 | 상세 |
@@ -97,6 +143,10 @@ grep -n "votes\|exists\|request.auth.uid" firebase/firestore.rules
 | 자기 팀 제외 | PASS/FAIL | 세부 내용 |
 | Bearer 패턴 | PASS/FAIL | 세부 내용 |
 | Firestore Rules | PASS/FAIL | 세부 내용 |
+| Phase-aware 역할 검증 | PASS/FAIL | 세부 내용 |
+| Phase-specific 중복 방지 | PASS/FAIL | 세부 내용 |
+| Admin 새 action 입력 검증 | PASS/FAIL | 세부 내용 |
+| 동점 차단 | PASS/FAIL | 세부 내용 |
 
 ## Exceptions
 
