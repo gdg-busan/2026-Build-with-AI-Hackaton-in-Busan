@@ -21,7 +21,7 @@
     - [x] Test Voting API via curl or Postman.
 - [x] Task: Conductor - User Manual Verification 'Database Seeding & Runtime Test' (Protocol in workflow.md)
 
-## Phase 3: Final Verification
+## Phase 3: Final Verification [checkpoint: 161752c]
 - [x] Task: Final Polish [6ee9cca]
     - [x] Clean up any temporary test data.
     - [x] Verify `README.md` instructions are up-to-date based on findings.
