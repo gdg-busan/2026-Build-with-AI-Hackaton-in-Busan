@@ -42,6 +42,26 @@ pnpm dev
 npx tsx scripts/seed-admin.ts
 ```
 
+## Testing
+
+### Unit Tests
+```bash
+npx vitest
+```
+
+### E2E Tests
+Playwright를 사용하여 전체 투표 흐름을 테스트할 수 있습니다.
+
+```bash
+# 1. 개발 서버 실행 (백그라운드)
+pnpm dev
+
+# 2. 테스트 실행
+npx playwright test
+```
+
+> **참고**: E2E 테스트는 로컬 개발 서버(http://localhost:3000)가 실행 중이어야 합니다. `seed-admin.ts`로 관리자 계정이 생성되어 있어야 하며, 테스트 코드 내에서 참가자 계정도 자동으로 처리됩니다.
+
 ## Pages
 
 | Route | 용도 | 인증 |
