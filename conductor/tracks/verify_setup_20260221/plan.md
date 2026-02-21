@@ -1,6 +1,6 @@
 # Implementation Plan - Verify Core Functionality & Environment Setup
 
-## Phase 1: Environment & Build Verification
+## Phase 1: Environment & Build Verification [checkpoint: 29bc8aa]
 - [x] Task: Validate Environment Configuration [ccd7114]
     - [x] Check `.env.local` against `.env.local.example`.
     - [x] Verify Firebase Admin credentials format.
@@ -8,18 +8,18 @@
     - [x] Run `pnpm install` to ensure lockfile consistency.
     - [x] Run `pnpm lint` to check code quality.
     - [x] Run `pnpm build` to verify production build.
-- [~] Task: Conductor - User Manual Verification 'Environment & Build Verification' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Environment & Build Verification' (Protocol in workflow.md)
 
 ## Phase 2: Database Seeding & Runtime Test
-- [ ] Task: Execute Seed Script
-    - [ ] Run `npx tsx scripts/seed-admin.ts`.
-    - [ ] Verify data in Firestore Emulator (or production if configured).
-- [ ] Task: Verify Core Flows
-    - [ ] Start dev server (`pnpm dev`).
-    - [ ] Test Login with seeded Admin code.
-    - [ ] Verify Admin Dashboard access.
-    - [ ] Test Voting API via curl or Postman.
-- [ ] Task: Conductor - User Manual Verification 'Database Seeding & Runtime Test' (Protocol in workflow.md)
+- [x] Task: Execute Seed Script [2fde7f4]
+    - [x] Run `npx tsx scripts/seed-admin.ts`.
+    - [x] Verify data in Firestore Emulator (or production if configured).
+- [x] Task: Verify Core Flows [2fde7f4]
+    - [x] Start dev server (`pnpm dev`).
+    - [x] Test Login with seeded Admin code.
+    - [x] Verify Admin Dashboard access.
+    - [x] Test Voting API via curl or Postman.
+- [~] Task: Conductor - User Manual Verification 'Database Seeding & Runtime Test' (Protocol in workflow.md)
 
 ## Phase 3: Final Verification
 - [ ] Task: Final Polish
