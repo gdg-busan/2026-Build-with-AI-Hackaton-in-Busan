@@ -10,7 +10,7 @@
     - [x] Run `pnpm build` to verify production build.
 - [x] Task: Conductor - User Manual Verification 'Environment & Build Verification' (Protocol in workflow.md)
 
-## Phase 2: Database Seeding & Runtime Test
+## Phase 2: Database Seeding & Runtime Test [checkpoint: f1ea756]
 - [x] Task: Execute Seed Script [2fde7f4]
     - [x] Run `npx tsx scripts/seed-admin.ts`.
     - [x] Verify data in Firestore Emulator (or production if configured).
@@ -19,10 +19,10 @@
     - [x] Test Login with seeded Admin code.
     - [x] Verify Admin Dashboard access.
     - [x] Test Voting API via curl or Postman.
-- [~] Task: Conductor - User Manual Verification 'Database Seeding & Runtime Test' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Database Seeding & Runtime Test' (Protocol in workflow.md)
 
 ## Phase 3: Final Verification
-- [ ] Task: Final Polish
-    - [ ] Clean up any temporary test data.
-    - [ ] Verify `README.md` instructions are up-to-date based on findings.
-- [ ] Task: Conductor - User Manual Verification 'Final Verification' (Protocol in workflow.md)
+- [x] Task: Final Polish [6ee9cca]
+    - [x] Clean up any temporary test data.
+    - [x] Verify `README.md` instructions are up-to-date based on findings.
+- [x] Task: Conductor - User Manual Verification 'Final Verification' (Protocol in workflow.md)
