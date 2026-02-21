@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import type { EventConfig } from "@/lib/types";
 
 export type TimerUrgency = "normal" | "warning" | "critical" | "expired" | "idle";
@@ -27,8 +27,8 @@ function formatTime(ms: number): string {
 
 export function useVotingTimer(eventConfig: EventConfig | null): VotingTimerResult {
   const [now, setNow] = useState(() => Date.now());
-  const [wasExtended, setWasExtended] = useState(false);
-  const prevDeadlineRef = useRef<number | null>(null);
+  const [prevDeadline, setPrevDeadline] = useState<number | null>(null);
+  const [extensionDetectedAt, setExtensionDetectedAt] = useState<number | null>(null);
 
   // Tick every second
   useEffect(() => {
@@ -38,26 +38,16 @@ export function useVotingTimer(eventConfig: EventConfig | null): VotingTimerResu
     return () => clearInterval(interval);
   }, []);
 
-  // Detect deadline extension
-  useEffect(() => {
-    if (!eventConfig?.votingDeadline) {
-      prevDeadlineRef.current = null;
-      return;
+  // Detect deadline extension during render (avoids setState-in-effect and ref-during-render)
+  const currentDeadline = eventConfig?.votingDeadline?.getTime() ?? null;
+  if (currentDeadline !== prevDeadline) {
+    setPrevDeadline(currentDeadline);
+    if (prevDeadline !== null && currentDeadline !== null && currentDeadline > prevDeadline) {
+      setExtensionDetectedAt(now);
     }
+  }
 
-    const currentDeadlineMs = eventConfig.votingDeadline.getTime();
-
-    if (
-      prevDeadlineRef.current !== null &&
-      currentDeadlineMs > prevDeadlineRef.current
-    ) {
-      setWasExtended(true);
-      const timeout = setTimeout(() => setWasExtended(false), 3000);
-      return () => clearTimeout(timeout);
-    }
-
-    prevDeadlineRef.current = currentDeadlineMs;
-  }, [eventConfig?.votingDeadline]);
+  const wasExtended = extensionDetectedAt !== null && now - extensionDetectedAt < 3000;
 
   // Not active if no config or not in a timer-eligible status
   const timerEligible =
