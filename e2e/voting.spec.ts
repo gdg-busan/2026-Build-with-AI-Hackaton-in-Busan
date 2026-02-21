@@ -72,25 +72,42 @@ test.describe("Voting E2E Tests", () => {
     expect(count).toBeGreaterThanOrEqual(10);
   });
 
-  test("participant vote status is visible", async ({ page }) => {
+  test("participant can cast a vote", async ({ page }) => {
     await loginAsParticipant(page);
     await page.getByRole("heading", { level: 3 }).first().waitFor({ timeout: 10000 });
 
-    // Participant should see either:
-    // - vote_submitted (already voted) with completion message
-    // - submit_vote button (can still vote)
+    // Check if already voted
     const votedText = page.getByText("vote_submitted");
-    const submitBtn = page.getByRole("button", { name: /submit_vote/ });
-
     const isVoted = await votedText.isVisible().catch(() => false);
-    const canVote = await submitBtn.isVisible().catch(() => false);
-
-    // One of these must be true
-    expect(isVoted || canVote).toBe(true);
 
     if (isVoted) {
-      await expect(page.getByText("투표가 성공적으로 완료되었습니다")).toBeVisible();
+      console.log("Participant already voted, skipping vote action.");
+      return;
     }
+
+    // Select 3 teams (ensure we don't pick disabled ones if any, though seeded user has no team)
+    const teamCards = page.locator(".relative.rounded-xl.border.p-5.cursor-pointer");
+    const count = await teamCards.count();
+    expect(count).toBeGreaterThanOrEqual(3);
+
+    for (let i = 0; i < 3; i++) {
+      await teamCards.nth(i).click();
+    }
+
+    // Click submit button on the page
+    // Text is likely "$ submit_vote (3팀)"
+    const submitBtn = page.getByRole("button", { name: /\$ submit_vote/ });
+    await expect(submitBtn).toBeEnabled();
+    await submitBtn.click();
+
+    // Confirm dialog
+    // Button text is "투표하기 (3팀)"
+    const confirmBtn = page.getByRole("button", { name: /투표하기/ });
+    await expect(confirmBtn).toBeVisible();
+    await confirmBtn.click();
+
+    // Wait for success message
+    await expect(page.getByText("$ vote_submitted!")).toBeVisible({ timeout: 15000 });
   });
 
   test("participant sees vote completed state on revisit", async ({ page }) => {
