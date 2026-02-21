@@ -37,8 +37,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <body
+        suppressHydrationWarning
         className={`${dmSans.variable} ${jetbrainsMono.variable} antialiased min-h-screen dot-grid`}
       >
         <div className="scanline fixed inset-0 z-50" />
