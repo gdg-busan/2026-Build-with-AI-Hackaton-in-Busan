@@ -917,8 +917,6 @@ export async function POST(request: NextRequest) {
         if (!userDoc.exists) {
           return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
-        const userData = userDoc.data()!;
-
         // Find all vote documents for this user
         const userVotesSnap = await votesCol().where("voterId", "==", userCode).get();
 

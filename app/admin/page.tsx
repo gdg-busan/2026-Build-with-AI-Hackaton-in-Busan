@@ -16,7 +16,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { calculateScores, getTop10, calculateFinalScores, detectFinalTies, getPhase1Results } from "@/lib/scoring";
-import type { TiedGroup, FinalTieGroup } from "@/lib/scoring";
+import type { TiedGroup } from "@/lib/scoring";
 import { TEAM_EMOJIS, EVENT_ID } from "@/lib/constants";
 import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatRoom, Announcement } from "@/lib/types";
 import { MISSIONS } from "@/lib/missions";

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 interface AnnouncementOverlayProps {
@@ -43,16 +43,13 @@ const TYPE_CONFIG = {
 const DECODE_CHARS =
   "!@#$%^&*()_+-=[]{}|;:,.<>?/~`01ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const HEADER_TEXT = "[SYSTEM NOTICE]";
+const emptySubscribe = () => () => {};
 
 function useTypewriter(text: string, delay: number, active: boolean) {
   const [displayed, setDisplayed] = useState("");
 
   useEffect(() => {
-    if (!active) {
-      setDisplayed("");
-      return;
-    }
-    setDisplayed("");
+    if (!active) return;
     let i = 0;
     const interval = setInterval(() => {
       i++;
@@ -62,7 +59,7 @@ function useTypewriter(text: string, delay: number, active: boolean) {
     return () => clearInterval(interval);
   }, [text, delay, active]);
 
-  return displayed;
+  return active ? displayed : "";
 }
 
 function useDecodingText(
@@ -74,10 +71,7 @@ function useDecodingText(
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!active || !targetText) {
-      setDisplayed("");
-      return;
-    }
+    if (!active || !targetText) return;
 
     const startTime = performance.now();
     const len = targetText.length;
@@ -111,7 +105,7 @@ function useDecodingText(
     };
   }, [targetText, duration, active]);
 
-  return displayed;
+  return (!active || !targetText) ? "" : displayed;
 }
 
 function AnnouncementContent({
@@ -310,11 +304,7 @@ export function AnnouncementOverlay({
 }: AnnouncementOverlayProps) {
   const reduced = useReducedMotion() ?? false;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   const handleDismiss = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);

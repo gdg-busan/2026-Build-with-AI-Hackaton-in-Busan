@@ -337,7 +337,7 @@ export default function VotePage() {
         throw lastError || new Error("투표에 실패했습니다");
       }
 
-      const data = await res.json();
+      await res.json();
 
       setConfirmOpen(false);
       setVoteSuccess(true);

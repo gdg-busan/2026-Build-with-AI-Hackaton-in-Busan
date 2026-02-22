@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Announcement } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -8,15 +8,15 @@ import { AnimatePresence, motion } from "framer-motion";
 const DECODE_CHARS = "!@#$%^&*()_+-=[]{}|;:,.<>?/~`01";
 
 function useReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-  return reduced;
+  return useSyncExternalStore(
+    (callback) => {
+      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      mq.addEventListener("change", callback);
+      return () => mq.removeEventListener("change", callback);
+    },
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    () => false,
+  );
 }
 
 /** Decoding text effect: random chars → real text */
@@ -36,10 +36,7 @@ function DecodingText({
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
-    if (!isNew || reducedMotion) {
-      setDisplayed(text);
-      return;
-    }
+    if (!isNew || reducedMotion) return;
 
     const startTime = performance.now();
     const chars = text.split("");
@@ -75,7 +72,7 @@ function DecodingText({
         textShadow: isNew ? `0 0 8px ${color}80` : `0 0 4px ${color}40`,
       }}
     >
-      {displayed}
+      {(!isNew || reducedMotion) ? text : displayed}
     </span>
   );
 }
@@ -167,20 +164,26 @@ export function AnnouncementTicker({ announcements }: AnnouncementTickerProps) {
   // Detect new announcements when props change
   useEffect(() => {
     const currentIds = new Set(announcements.map((a) => a.id));
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
     if (!isFirstLoad.current) {
       const freshIds = new Set<string>();
       for (const id of currentIds) {
         if (!prevIdsRef.current.has(id)) freshIds.add(id);
       }
       if (freshIds.size > 0) {
-        setNewIds(freshIds);
-        setSweepTrigger((t) => t + 1);
-        setTimeout(() => setNewIds(new Set()), 1200);
+        timers.push(setTimeout(() => {
+          setNewIds(freshIds);
+          setSweepTrigger((t) => t + 1);
+        }, 0));
+        timers.push(setTimeout(() => setNewIds(new Set()), 1200));
       }
     } else {
       isFirstLoad.current = false;
     }
     prevIdsRef.current = currentIds;
+
+    return () => timers.forEach(clearTimeout);
   }, [announcements]);
 
   const typeColor = useCallback((type: Announcement["type"]) => {
