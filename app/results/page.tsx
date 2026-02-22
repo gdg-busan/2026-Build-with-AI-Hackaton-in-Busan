@@ -121,10 +121,11 @@ export default function ResultsPage() {
           eventConfig.participantWeight,
           selectedIds.length > 0 ? selectedIds : allTeams.map((t) => t.id)
         );
-        // Apply manual ranking overrides if admin resolved ties, otherwise take top 3
-        const finalScores = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length > 0
+        // Apply manual ranking overrides if admin resolved ties, then always take top 3
+        const overridden = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length > 0
           ? applyFinalRankingOverrides(computed, eventConfig.finalRankingOverrides)
-          : computed.slice(0, 3);
+          : computed;
+        const finalScores = overridden.slice(0, 3);
         setScores(finalScores);
         setRevealPhase("final");
       }

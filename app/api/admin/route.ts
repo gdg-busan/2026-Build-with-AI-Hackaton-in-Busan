@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
             eventData?.participantWeight ?? 0.2,
             phase1SelectedTeamIds
           );
-          const { tiedTeams } = detectFinalTies(finalScores);
+          const { tiedTeams } = detectFinalTies(finalScores, 3);
           if (tiedTeams && tiedTeams.length > 0 && (!finalRankingOverrides || finalRankingOverrides.length === 0)) {
             return NextResponse.json(
               {

@@ -75,6 +75,14 @@ function Phase1Reveal({ teams, onComplete }: { teams: Team[]; onComplete: () => 
   const [stage, setStage] = useState<StageP1>("blackout");
   const [countdown, setCountdown] = useState(5);
   const [revealedTeams, setRevealedTeams] = useState<Team[]>([]);
+  const scrollEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to latest revealed team
+  useEffect(() => {
+    if (stage === "reveal-all" && scrollEndRef.current) {
+      scrollEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [stage, revealedTeams.length]);
 
   // Stage 1: Blackout countdown 5->0
   useEffect(() => {
@@ -109,7 +117,7 @@ function Phase1Reveal({ teams, onComplete }: { teams: Team[]; onComplete: () => 
   }, [stage, revealedTeams, teams]);
 
   return (
-    <div className={`fixed inset-0 bg-[#0A0E1A] flex justify-center z-50 ${stage === "final" ? "items-start overflow-y-auto" : "items-center overflow-hidden"}`}>
+    <div className={`fixed inset-0 bg-[#0A0E1A] flex justify-center z-50 ${stage === "reveal-all" || stage === "final" ? "items-start overflow-y-auto pt-8" : "items-center overflow-hidden"}`}>
       {/* Stage 1: Blackout */}
       <AnimatePresence>
         {stage === "blackout" && (
@@ -202,6 +210,7 @@ function Phase1Reveal({ teams, onComplete }: { teams: Team[]; onComplete: () => 
                 </motion.div>
               ))}
             </AnimatePresence>
+            <div ref={scrollEndRef} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -261,8 +270,16 @@ function FinalReveal({ scores, onComplete }: { scores: TeamScore[]; onComplete: 
   const [countdown, setCountdown] = useState(5);
   const [revealedTop3, setRevealedTop3] = useState<TeamScore[]>([]);
   const confettiRef = useRef(false);
+  const scrollEndRef = useRef<HTMLDivElement>(null);
 
   const top3 = [...scores].sort((a, b) => b.rank - a.rank); // 3,2,1 order for reveal
+
+  // Auto-scroll to latest revealed team
+  useEffect(() => {
+    if (stage === "top3" && scrollEndRef.current) {
+      scrollEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [stage, revealedTop3.length]);
 
   const fireConfetti = useCallback(async () => {
     if (confettiRef.current) return;
@@ -313,7 +330,7 @@ function FinalReveal({ scores, onComplete }: { scores: TeamScore[]; onComplete: 
   }, [stage, revealedTop3, top3, fireConfetti]);
 
   return (
-    <div className={`fixed inset-0 bg-[#0A0E1A] flex justify-center z-50 ${stage === "final" ? "items-start overflow-y-auto" : "items-center overflow-hidden"}`}>
+    <div className={`fixed inset-0 bg-[#0A0E1A] flex justify-center z-50 ${stage === "top3" || stage === "final" ? "items-start overflow-y-auto pt-8" : "items-center overflow-hidden"}`}>
       {/* Stage 1: Blackout */}
       <AnimatePresence>
         {stage === "blackout" && (
@@ -423,6 +440,7 @@ function FinalReveal({ scores, onComplete }: { scores: TeamScore[]; onComplete: 
                 );
               })}
             </AnimatePresence>
+            <div ref={scrollEndRef} />
           </motion.div>
         )}
       </AnimatePresence>

@@ -177,8 +177,8 @@ export type FinalTieGroup = {
   teams: TeamScore[];
 };
 
-/** Detect ALL score ties among the full ranked list */
-export function detectFinalTies(scores: TeamScore[]): {
+/** Detect score ties among the ranked list, optionally limited to top N positions */
+export function detectFinalTies(scores: TeamScore[], topN?: number): {
   tiedTeams: TeamScore[] | null;
   tieGroups: FinalTieGroup[];
 } {
@@ -193,10 +193,17 @@ export function detectFinalTies(scores: TeamScore[]): {
   }
 
   // Find all groups with more than 1 team (ties)
-  const tieGroups: FinalTieGroup[] = Array.from(scoreGroups.entries())
+  let tieGroups: FinalTieGroup[] = Array.from(scoreGroups.entries())
     .filter(([, group]) => group.length > 1)
     .map(([roundedScore, teams]) => ({ roundedScore, teams }))
     .sort((a, b) => b.roundedScore - a.roundedScore);
+
+  // If topN is specified, only keep tie groups where at least one team has rank <= topN
+  if (topN !== undefined) {
+    tieGroups = tieGroups.filter((g) =>
+      g.teams.some((t) => t.rank <= topN)
+    );
+  }
 
   if (tieGroups.length === 0) return { tiedTeams: null, tieGroups: [] };
 

@@ -1044,13 +1044,13 @@ export default function AdminPage() {
                 eventConfig.participantWeight,
                 eventConfig.phase1SelectedTeamIds!
               );
-              const { tiedTeams, tieGroups } = detectFinalTies(finalScores);
+              const { tiedTeams, tieGroups } = detectFinalTies(finalScores, 3);
               const hasOverrides = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length > 0;
 
               if (!tiedTeams && !hasOverrides) return null;
 
-              // Count total tied teams for the ranking selectors
-              const tiedTeamCount = tiedTeams ? tiedTeams.length : 0;
+              // Only resolve up to top 3 positions
+              const tiedTeamCount = tiedTeams ? Math.min(tiedTeams.length, 3) : 0;
               const medals = ["🥇", "🥈", "🥉"];
               const rankLabel = (i: number) => `${medals[i] || "🏅"} ${i + 1}위`;
 
@@ -1142,10 +1142,10 @@ export default function AdminPage() {
                         </div>
                       )}
 
-                      {/* Ranking selectors for ALL tied positions */}
+                      {/* Ranking selectors for top 3 positions only */}
                       <div className="space-y-2">
-                        <p className="text-gray-400 font-mono text-xs">동점 팀 순위 지정 (순서대로 선택):</p>
-                        {tiedTeams.map((_, rank) => (
+                        <p className="text-gray-400 font-mono text-xs">TOP 3 순위 지정 (순서대로 선택):</p>
+                        {Array.from({ length: tiedTeamCount }, (_, rank) => rank).map((rank) => (
                           <div key={rank} className="flex items-center gap-3">
                             <span className="font-mono text-sm w-14 text-right">{rankLabel(rank)}</span>
                             <select
