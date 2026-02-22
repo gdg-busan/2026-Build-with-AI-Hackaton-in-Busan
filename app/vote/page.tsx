@@ -96,7 +96,9 @@ export default function VotePage() {
             status: data.status,
             judgeWeight: data.judgeWeight ?? 1,
             participantWeight: data.participantWeight ?? 1,
-            maxVotesPerUser: data.maxVotesPerUser ?? 3,
+            maxVotesP1: data.maxVotesP1 ?? data.maxVotesPerUser ?? 3,
+            maxVotesP2: data.maxVotesP2 ?? data.maxVotesPerUser ?? 3,
+            maxVotesPerUser: data.maxVotesPerUser,
             votingDeadline: data.votingDeadline?.toDate() ?? null,
             title: data.title ?? "",
             createdAt: data.createdAt?.toDate() ?? new Date(),
@@ -255,7 +257,10 @@ export default function VotePage() {
 
   const handleToggle = useCallback(
     (teamId: string) => {
-      const maxVotes = eventConfig?.maxVotesPerUser ?? 3;
+      const maxVotes =
+        eventConfig?.status === "voting_p2"
+          ? (eventConfig?.maxVotesP2 ?? eventConfig?.maxVotesPerUser ?? 3)
+          : (eventConfig?.maxVotesP1 ?? eventConfig?.maxVotesPerUser ?? 3);
       setSelectedTeams((prev) => {
         if (prev.includes(teamId)) {
           return prev.filter((id) => id !== teamId);
@@ -310,7 +315,10 @@ export default function VotePage() {
   };
 
   const selectedTeamObjects = teams.filter((t) => selectedTeams.includes(t.id));
-  const maxVotes = eventConfig?.maxVotesPerUser ?? 3;
+  const maxVotes =
+    eventConfig?.status === "voting_p2"
+      ? (eventConfig?.maxVotesP2 ?? eventConfig?.maxVotesPerUser ?? 3)
+      : (eventConfig?.maxVotesP1 ?? eventConfig?.maxVotesPerUser ?? 3);
   const myTeam = teams.find((t) => t.id === user?.teamId);
 
   const status = eventConfig?.status;

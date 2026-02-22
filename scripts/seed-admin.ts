@@ -59,7 +59,8 @@ async function seed() {
       status: "waiting",
       judgeWeight: 0.8,
       participantWeight: 0.2,
-      maxVotesPerUser: 3,
+      maxVotesP1: 3,
+      maxVotesP2: 3,
       createdAt: new Date(),
     });
     console.log(`✅ 이벤트 "${EVENT_ID}" 생성 완료`);

@@ -44,18 +44,32 @@ export function getTop10(scores: TeamScore[]): TeamScore[] {
   return scores.slice(0, 10);
 }
 
+export type TiedGroup = {
+  voteCount: number;
+  teams: Team[];
+};
+
 export function getPhase1Results(
   teams: Team[],
   topN: number = 10
-): { selectedTeamIds: string[]; tiedTeams: Team[] | null } {
+): {
+  selectedTeamIds: string[];
+  tiedTeams: Team[] | null;
+  tiedGroups: TiedGroup[];
+  hasTiedGroups: boolean;
+} {
   const sorted = [...teams].sort(
     (a, b) => b.participantVoteCount - a.participantVoteCount
   );
 
   if (sorted.length <= topN) {
+    // All teams selected — check for tied groups within them
+    const tiedGroups = findTiedGroups(sorted);
     return {
       selectedTeamIds: sorted.map((t) => t.id),
       tiedTeams: null,
+      tiedGroups,
+      hasTiedGroups: tiedGroups.length > 0,
     };
   }
 
@@ -73,13 +87,37 @@ export function getPhase1Results(
       .filter((t) => t.participantVoteCount > cutoffVoteCount)
       .map((t) => t.id);
 
-    return { selectedTeamIds, tiedTeams };
+    // Also find tied groups within the already-selected teams
+    const selectedTeams = sorted.filter((t) => selectedTeamIds.includes(t.id));
+    const tiedGroups = findTiedGroups(selectedTeams);
+
+    return { selectedTeamIds, tiedTeams, tiedGroups, hasTiedGroups: tiedGroups.length > 0 };
   }
 
+  // No boundary tie — check for tied groups within selected teams
+  const selectedTeams = sorted.slice(0, topN);
+  const tiedGroups = findTiedGroups(selectedTeams);
+
   return {
-    selectedTeamIds: sorted.slice(0, topN).map((t) => t.id),
+    selectedTeamIds: selectedTeams.map((t) => t.id),
     tiedTeams: null,
+    tiedGroups,
+    hasTiedGroups: tiedGroups.length > 0,
   };
+}
+
+/** Find groups of teams sharing the same participantVoteCount */
+function findTiedGroups(teams: Team[]): TiedGroup[] {
+  const groupMap = new Map<number, Team[]>();
+  for (const team of teams) {
+    const count = team.participantVoteCount;
+    if (!groupMap.has(count)) groupMap.set(count, []);
+    groupMap.get(count)!.push(team);
+  }
+  return Array.from(groupMap.entries())
+    .filter(([, group]) => group.length > 1)
+    .map(([voteCount, groupTeams]) => ({ voteCount, teams: groupTeams }))
+    .sort((a, b) => b.voteCount - a.voteCount);
 }
 
 export function calculateFinalScores(
@@ -129,18 +167,20 @@ export function calculateFinalScores(
     s.rank = i + 1;
   });
 
-  // Include all teams tied at the top-3 boundary
-  if (scored.length <= 3) return scored;
-  const cutoffScore = Math.round(scored[2].finalScore * 100);
-  const result = scored.filter(
-    (s, i) => i < 3 || Math.round(s.finalScore * 100) === cutoffScore
-  );
-  return result;
+  return scored;
 }
 
-/** Detect ties among the top 3 final scores (including boundary ties) */
-export function detectFinalTies(scores: TeamScore[]): TeamScore[] | null {
-  if (scores.length <= 1) return null;
+export type FinalTieGroup = {
+  roundedScore: number;
+  teams: TeamScore[];
+};
+
+/** Detect ALL score ties among the full ranked list */
+export function detectFinalTies(scores: TeamScore[]): {
+  tiedTeams: TeamScore[] | null;
+  tieGroups: FinalTieGroup[];
+} {
+  if (scores.length <= 1) return { tiedTeams: null, tieGroups: [] };
 
   // Collect all unique scores in the candidates
   const scoreGroups = new Map<number, TeamScore[]>();
@@ -150,28 +190,44 @@ export function detectFinalTies(scores: TeamScore[]): TeamScore[] | null {
     scoreGroups.get(rounded)!.push(s);
   }
 
-  // Check if more than 3 candidates (boundary tie) or any score group has >1 team within top 3
-  if (scores.length > 3) {
-    // Boundary tie: more candidates than slots
-    return scores;
-  }
+  // Find all groups with more than 1 team (ties)
+  const tieGroups: FinalTieGroup[] = Array.from(scoreGroups.entries())
+    .filter(([, group]) => group.length > 1)
+    .map(([roundedScore, teams]) => ({ roundedScore, teams }))
+    .sort((a, b) => b.roundedScore - a.roundedScore);
 
-  // Exactly 3 candidates: check for internal ties
-  const tiedTeams = Array.from(scoreGroups.values())
-    .filter((group) => group.length > 1)
-    .flat();
+  if (tieGroups.length === 0) return { tiedTeams: null, tieGroups: [] };
 
-  return tiedTeams.length > 0 ? scores : null;
+  // Return all teams that are part of any tie group
+  const tiedTeams = tieGroups.flatMap((g) => g.teams);
+  return { tiedTeams, tieGroups };
 }
 
-/** Apply manual ranking overrides to final scores */
+/** Apply manual ranking overrides to final scores.
+ *  Overrides reorder only the tied positions in-place.
+ *  Teams not in overrides keep their original ranks untouched.
+ */
 export function applyFinalRankingOverrides(
   scores: TeamScore[],
   overrides: string[]
 ): TeamScore[] {
-  return overrides.map((teamId, i) => {
-    const score = scores.find((s) => s.teamId === teamId);
-    if (!score) return null;
-    return { ...score, rank: i + 1 };
-  }).filter((s): s is TeamScore => s !== null);
+  if (overrides.length === 0) return scores;
+
+  // Find the original ranks of the overridden teams
+  const overriddenOriginalRanks = overrides
+    .map((id) => scores.find((s) => s.teamId === id))
+    .filter((s): s is TeamScore => s !== null)
+    .map((s) => s.rank)
+    .sort((a, b) => a - b);
+
+  // Assign the sorted original rank slots to the override order
+  const result = scores.map((s) => {
+    const overrideIndex = overrides.indexOf(s.teamId);
+    if (overrideIndex !== -1 && overrideIndex < overriddenOriginalRanks.length) {
+      return { ...s, rank: overriddenOriginalRanks[overrideIndex] };
+    }
+    return { ...s };
+  });
+
+  return result.sort((a, b) => a.rank - b.rank);
 }
