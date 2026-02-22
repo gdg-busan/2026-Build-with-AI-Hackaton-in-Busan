@@ -1,6 +1,6 @@
 "use client";
 
-import { AnnouncementTicker } from "@/components/AnnouncementTicker";
+import { AnnouncementManager } from "@/components/AnnouncementManager";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { MemberProfileDialog } from "@/components/MemberProfileDialog";
 import { MissionPanel } from "@/components/MissionPanel";
@@ -594,7 +594,7 @@ export default function VotePage() {
             </Button>
           </div>
         </div>
-        <AnnouncementTicker />
+        <AnnouncementManager />
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
