@@ -5,13 +5,14 @@ export function calculateScores(
   judgeWeight: number = 0.8,
   participantWeight: number = 0.2
 ): TeamScore[] {
-  const maxJudgeVotes = Math.max(...teams.map((t) => t.judgeVoteCount), 1);
+  const visibleTeams = teams.filter((t) => !t.isHidden);
+  const maxJudgeVotes = Math.max(...visibleTeams.map((t) => t.judgeVoteCount), 1);
   const maxParticipantVotes = Math.max(
-    ...teams.map((t) => t.participantVoteCount),
+    ...visibleTeams.map((t) => t.participantVoteCount),
     1
   );
 
-  const scored = teams.map((team) => {
+  const scored = visibleTeams.map((team) => {
     const judgeNormalized = (team.judgeVoteCount / maxJudgeVotes) * 100;
     const participantNormalized =
       (team.participantVoteCount / maxParticipantVotes) * 100;
@@ -58,7 +59,8 @@ export function getPhase1Results(
   tiedGroups: TiedGroup[];
   hasTiedGroups: boolean;
 } {
-  const sorted = [...teams].sort(
+  const visibleTeams = teams.filter((t) => !t.isHidden);
+  const sorted = [...visibleTeams].sort(
     (a, b) => b.participantVoteCount - a.participantVoteCount
   );
 
@@ -127,7 +129,7 @@ export function calculateFinalScores(
   phase1SelectedTeamIds: string[]
 ): TeamScore[] {
   const filteredTeams = teams.filter((t) =>
-    phase1SelectedTeamIds.includes(t.id)
+    phase1SelectedTeamIds.includes(t.id) && !t.isHidden
   );
 
   if (filteredTeams.length === 0) return [];

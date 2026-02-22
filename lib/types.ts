@@ -42,6 +42,7 @@ export interface Team {
   demoUrl?: string | null;
   githubUrl?: string | null;
   techStack?: string[];
+  isHidden?: boolean;
 }
 
 export interface User {
@@ -53,6 +54,7 @@ export interface User {
   hasVotedP1?: boolean;
   hasVotedP2?: boolean;
   bio: string | null;
+  allMissionsCompletedAt?: Date | null;
 }
 
 export interface MemberProfile {

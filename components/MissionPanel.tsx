@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
 import { EVENT_ID } from "@/lib/constants";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -16,6 +16,7 @@ export function MissionPanel() {
   );
   const [open, setOpen] = useState(false);
   const [teamCount, setTeamCount] = useState(0);
+  const [allCompletedAt, setAllCompletedAt] = useState<Date | null>(null);
 
   // Fetch team count for dynamic mission targets
   useEffect(() => {
@@ -25,6 +26,19 @@ export function MissionPanel() {
     });
     return () => unsub();
   }, []);
+
+  // Subscribe to user doc for allMissionsCompletedAt
+  useEffect(() => {
+    if (!user?.uniqueCode) return;
+    const userRef = doc(getFirebaseDb(), "events", EVENT_ID, "users", user.uniqueCode);
+    const unsub = onSnapshot(userRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setAllCompletedAt(data.allMissionsCompletedAt?.toDate?.() ?? null);
+      }
+    });
+    return () => unsub();
+  }, [user?.uniqueCode]);
 
   return (
     <>
@@ -146,9 +160,17 @@ export function MissionPanel() {
           </div>
 
           <div className="px-5 py-3 border-t border-primary/20">
-            <p className="text-[10px] text-muted-foreground/60 font-mono text-center">
-              {"// 미션을 완료하고 배지를 획득하세요"}
-            </p>
+            {completedCount === totalCount && totalCount > 0 && allCompletedAt ? (
+              <p className="text-xs text-primary font-mono text-center glow-green">
+                {"🎉 모든 미션 완료! ("}
+                {allCompletedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                {")"}
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground/60 font-mono text-center">
+                {"// 미션을 완료하고 배지를 획득하세요"}
+              </p>
+            )}
           </div>
         </SheetContent>
       </Sheet>

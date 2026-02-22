@@ -38,6 +38,10 @@ export async function trackMission(
     },
     { merge: true }
   );
+
+  if (isNowComplete) {
+    await checkAllMissionsCompleted(uniqueCode);
+  }
 }
 
 /**
@@ -81,6 +85,10 @@ export async function trackUniqueMission(
     },
     { merge: true }
   );
+
+  if (isNowComplete) {
+    await checkAllMissionsCompleted(uniqueCode);
+  }
 }
 
 /**
@@ -98,5 +106,31 @@ export async function checkProfileComplete(uniqueCode: string): Promise<void> {
 
   if (hasName && hasBio && hasTechTags) {
     await trackMission(uniqueCode, "complete_profile", 1);
+  }
+}
+
+/**
+ * Check if all missions are completed and record the timestamp.
+ * Only records on first completion (preserves earliest timestamp).
+ */
+async function checkAllMissionsCompleted(uniqueCode: string): Promise<void> {
+  const userRef = adminDb.doc(`events/${EVENT_ID}/users/${uniqueCode}`);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) return;
+
+  // Skip if already recorded
+  if (userSnap.data()?.allMissionsCompletedAt) return;
+
+  const definedIds = new Set<string>(MISSIONS.map((m) => m.id));
+  const missionsSnap = await userRef.collection("missions").get();
+  const completedMissions = missionsSnap.docs.filter(
+    (d) => definedIds.has(d.id) && d.data().completed === true
+  );
+
+  // Check if all defined missions are completed
+  if (completedMissions.length >= MISSIONS.length) {
+    await userRef.update({
+      allMissionsCompletedAt: FieldValue.serverTimestamp(),
+    });
   }
 }

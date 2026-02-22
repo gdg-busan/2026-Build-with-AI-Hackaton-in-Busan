@@ -70,7 +70,7 @@ export default function LoginPage() {
           <p className="font-mono text-sm text-[#00FF88]/70">
             {titleDone ? (
               <TypeWriter
-                text="> 투표 시스템에 접속합니다..."
+                text="> 해커톤에 참여합니다..."
                 speed={40}
               />
             ) : (

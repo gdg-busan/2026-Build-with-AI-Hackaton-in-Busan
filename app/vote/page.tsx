@@ -132,6 +132,7 @@ export default function VotePage() {
           demoUrl: d.data().demoUrl ?? null,
           githubUrl: d.data().githubUrl ?? null,
           techStack: d.data().techStack ?? [],
+          isHidden: d.data().isHidden ?? false,
         }));
         setTeams(t);
       },
@@ -221,6 +222,15 @@ export default function VotePage() {
     setSelectedTeams([]);
   }, [eventConfig?.status]);
 
+  // Remove hidden teams from selection when teams data changes
+  useEffect(() => {
+    setSelectedTeams((prev) => {
+      const visibleIds = new Set(teams.filter((t) => !t.isHidden).map((t) => t.id));
+      const filtered = prev.filter((id) => visibleIds.has(id));
+      return filtered.length !== prev.length ? filtered : prev;
+    });
+  }, [teams]);
+
   // Fetch member profiles when inspectTeam changes
   useEffect(() => {
     if (!inspectTeam || inspectTeam.memberUserIds.length === 0) {
@@ -282,17 +292,52 @@ export default function VotePage() {
       const token = await getFirebaseAuth().currentUser?.getIdToken();
       if (!token) throw new Error("인증 토큰을 가져올 수 없습니다");
 
-      const res = await fetch("/api/vote", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ selectedTeams }),
-      });
+      const maxRetries = 3;
+      let lastError: Error | null = null;
+      let res: Response | null = null;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          res = await fetch("/api/vote", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ selectedTeams }),
+          });
+
+          if (res.ok) break;
+
+          // Client errors (4xx) - don't retry
+          if (res.status >= 400 && res.status < 500) {
+            const errData = await res.json();
+            throw new Error(errData.error || "투표에 실패했습니다");
+          }
+
+          // Server errors (5xx) - retry
+          lastError = new Error(`서버 오류 (${res.status})`);
+        } catch (err) {
+          if (err instanceof TypeError) {
+            // Network error - retry
+            lastError = new Error("네트워크 연결을 확인해 주세요");
+          } else {
+            throw err; // Re-throw client errors
+          }
+        }
+
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          toast.info(`네트워크 재시도 중... (${attempt + 1}/${maxRetries})`);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+
+      if (!res || !res.ok) {
+        throw lastError || new Error("투표에 실패했습니다");
+      }
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "투표에 실패했습니다");
 
       setConfirmOpen(false);
       setVoteSuccess(true);
@@ -328,11 +373,12 @@ export default function VotePage() {
     (status === "voting_p1" && user?.role === "participant") ||
     (status === "voting_p2" && user?.role === "judge");
 
-  // Teams to display in the grid
-  const displayTeams =
+  // Teams to display in the grid (filter out hidden teams)
+  const displayTeams = (
     status === "voting_p2" && eventConfig?.phase1SelectedTeamIds
       ? teams.filter((t) => eventConfig.phase1SelectedTeamIds!.includes(t.id))
-      : teams;
+      : teams
+  ).filter((t) => !t.isHidden);
 
   // Show teams grid in all states
   const showTeams =
