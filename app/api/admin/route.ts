@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
             eventData?.participantWeight ?? 0.2,
             phase1SelectedTeamIds
           );
-          const { tiedTeams } = detectFinalTies(finalScores);
+          const { tiedTeams } = detectFinalTies(finalScores, 3);
           if (tiedTeams && tiedTeams.length > 0 && (!finalRankingOverrides || finalRankingOverrides.length === 0)) {
             return NextResponse.json(
               {
@@ -814,7 +814,11 @@ export async function POST(request: NextRequest) {
             completedAt: string | null;
           }>;
           completedCount: number;
+          allMissionsCompletedAt: string | null;
         }> = [];
+
+        const { MISSIONS: DEFINED_MISSIONS } = await import("@/lib/missions");
+        const definedIds = new Set<string>(DEFINED_MISSIONS.map((m) => m.id));
 
         for (const userDoc of allUsersSnap.docs) {
           const userData = userDoc.data();
@@ -825,7 +829,9 @@ export async function POST(request: NextRequest) {
             .collection("missions")
             .get();
 
-          const missions = missionsSnap.docs.map((d) => {
+          const missions = missionsSnap.docs
+            .filter((d) => definedIds.has(d.id))
+            .map((d) => {
             const md = d.data();
             return {
               missionId: d.id,
@@ -835,13 +841,25 @@ export async function POST(request: NextRequest) {
             };
           });
 
+          const completedCount = missions.filter((m) => m.completed).length;
+          let completedAtIso = userData.allMissionsCompletedAt?.toDate()?.toISOString() ?? null;
+
+          // Backfill allMissionsCompletedAt for users who completed all missions before this feature
+          if (completedCount >= DEFINED_MISSIONS.length && !completedAtIso) {
+            await usersCol().doc(userDoc.id).update({
+              allMissionsCompletedAt: FieldValue.serverTimestamp(),
+            });
+            completedAtIso = new Date().toISOString();
+          }
+
           results.push({
             uniqueCode: userDoc.id,
             name: userData.name ?? userDoc.id,
             role: userData.role,
             teamId: userData.teamId ?? null,
             missions,
-            completedCount: missions.filter((m) => m.completed).length,
+            completedCount,
+            allMissionsCompletedAt: completedAtIso,
           });
         }
 
@@ -890,6 +908,68 @@ export async function POST(request: NextRequest) {
           timerDurationSec: null,
           autoCloseEnabled: false,
         });
+        return NextResponse.json({ success: true });
+      }
+
+      case "resetUserVote": {
+        const { userCode } = data as { userCode: string };
+        const userDoc = await usersCol().doc(userCode).get();
+        if (!userDoc.exists) {
+          return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+        const userData = userDoc.data()!;
+
+        // Find all vote documents for this user
+        const userVotesSnap = await votesCol().where("voterId", "==", userCode).get();
+
+        const batch = adminDb.batch();
+
+        // For each vote, decrement the team vote counts
+        // Pre-fetch all team docs referenced in votes to check existence
+        const allTeamIdsInVotes = new Set<string>();
+        for (const voteDoc of userVotesSnap.docs) {
+          const st = voteDoc.data().selectedTeams as string[];
+          st.forEach((id) => allTeamIdsInVotes.add(id));
+        }
+        const existingTeamIds = new Set<string>();
+        if (allTeamIdsInVotes.size > 0) {
+          const teamRefs = [...allTeamIdsInVotes].map((id) => teamsCol().doc(id));
+          const teamSnaps = await adminDb.getAll(...teamRefs);
+          teamSnaps.forEach((s) => { if (s.exists) existingTeamIds.add(s.id); });
+        }
+
+        for (const voteDoc of userVotesSnap.docs) {
+          const voteData = voteDoc.data();
+          const selectedTeams = voteData.selectedTeams as string[];
+          const voteRole = voteData.role as string;
+          const countField = voteRole === "judge" ? "judgeVoteCount" : "participantVoteCount";
+
+          for (const teamId of selectedTeams) {
+            // Skip decrement if team doc no longer exists
+            if (!existingTeamIds.has(teamId)) continue;
+            batch.update(teamsCol().doc(teamId), {
+              [countField]: FieldValue.increment(-1),
+            });
+          }
+
+          // Delete the vote document
+          batch.delete(voteDoc.ref);
+        }
+
+        // Reset user's voting flags
+        batch.update(usersCol().doc(userCode), {
+          hasVoted: false,
+          hasVotedP1: false,
+          hasVotedP2: false,
+        });
+
+        await batch.commit();
+        return NextResponse.json({ success: true });
+      }
+
+      case "toggleTeamHidden": {
+        const { teamId, isHidden } = data as { teamId: string; isHidden: boolean };
+        await teamsCol().doc(teamId).update({ isHidden: !!isHidden });
         return NextResponse.json({ success: true });
       }
 

@@ -5,13 +5,14 @@ export function calculateScores(
   judgeWeight: number = 0.8,
   participantWeight: number = 0.2
 ): TeamScore[] {
-  const maxJudgeVotes = Math.max(...teams.map((t) => t.judgeVoteCount), 1);
+  const visibleTeams = teams.filter((t) => !t.isHidden);
+  const maxJudgeVotes = Math.max(...visibleTeams.map((t) => t.judgeVoteCount), 1);
   const maxParticipantVotes = Math.max(
-    ...teams.map((t) => t.participantVoteCount),
+    ...visibleTeams.map((t) => t.participantVoteCount),
     1
   );
 
-  const scored = teams.map((team) => {
+  const scored = visibleTeams.map((team) => {
     const judgeNormalized = (team.judgeVoteCount / maxJudgeVotes) * 100;
     const participantNormalized =
       (team.participantVoteCount / maxParticipantVotes) * 100;
@@ -58,7 +59,8 @@ export function getPhase1Results(
   tiedGroups: TiedGroup[];
   hasTiedGroups: boolean;
 } {
-  const sorted = [...teams].sort(
+  const visibleTeams = teams.filter((t) => !t.isHidden);
+  const sorted = [...visibleTeams].sort(
     (a, b) => b.participantVoteCount - a.participantVoteCount
   );
 
@@ -127,7 +129,7 @@ export function calculateFinalScores(
   phase1SelectedTeamIds: string[]
 ): TeamScore[] {
   const filteredTeams = teams.filter((t) =>
-    phase1SelectedTeamIds.includes(t.id)
+    phase1SelectedTeamIds.includes(t.id) && !t.isHidden
   );
 
   if (filteredTeams.length === 0) return [];
@@ -175,8 +177,8 @@ export type FinalTieGroup = {
   teams: TeamScore[];
 };
 
-/** Detect ALL score ties among the full ranked list */
-export function detectFinalTies(scores: TeamScore[]): {
+/** Detect score ties among the ranked list, optionally limited to top N positions */
+export function detectFinalTies(scores: TeamScore[], topN?: number): {
   tiedTeams: TeamScore[] | null;
   tieGroups: FinalTieGroup[];
 } {
@@ -191,10 +193,17 @@ export function detectFinalTies(scores: TeamScore[]): {
   }
 
   // Find all groups with more than 1 team (ties)
-  const tieGroups: FinalTieGroup[] = Array.from(scoreGroups.entries())
+  let tieGroups: FinalTieGroup[] = Array.from(scoreGroups.entries())
     .filter(([, group]) => group.length > 1)
     .map(([roundedScore, teams]) => ({ roundedScore, teams }))
     .sort((a, b) => b.roundedScore - a.roundedScore);
+
+  // If topN is specified, only keep tie groups where at least one team has rank <= topN
+  if (topN !== undefined) {
+    tieGroups = tieGroups.filter((g) =>
+      g.teams.some((t) => t.rank <= topN)
+    );
+  }
 
   if (tieGroups.length === 0) return { tiedTeams: null, tieGroups: [] };
 

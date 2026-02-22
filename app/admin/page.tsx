@@ -98,6 +98,7 @@ export default function AdminPage() {
       completedAt: string | null;
     }>;
     completedCount: number;
+    allMissionsCompletedAt?: string | null;
   };
   const [missionUsers, setMissionUsers] = useState<MissionUserProgress[]>([]);
   const [missionLoading, setMissionLoading] = useState(false);
@@ -1043,13 +1044,13 @@ export default function AdminPage() {
                 eventConfig.participantWeight,
                 eventConfig.phase1SelectedTeamIds!
               );
-              const { tiedTeams, tieGroups } = detectFinalTies(finalScores);
+              const { tiedTeams, tieGroups } = detectFinalTies(finalScores, 3);
               const hasOverrides = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length > 0;
 
               if (!tiedTeams && !hasOverrides) return null;
 
-              // Count total tied teams for the ranking selectors
-              const tiedTeamCount = tiedTeams ? tiedTeams.length : 0;
+              // Only resolve up to top 3 positions
+              const tiedTeamCount = tiedTeams ? Math.min(tiedTeams.length, 3) : 0;
               const medals = ["🥇", "🥈", "🥉"];
               const rankLabel = (i: number) => `${medals[i] || "🏅"} ${i + 1}위`;
 
@@ -1141,10 +1142,10 @@ export default function AdminPage() {
                         </div>
                       )}
 
-                      {/* Ranking selectors for ALL tied positions */}
+                      {/* Ranking selectors for top 3 positions only */}
                       <div className="space-y-2">
-                        <p className="text-gray-400 font-mono text-xs">동점 팀 순위 지정 (순서대로 선택):</p>
-                        {tiedTeams.map((_, rank) => (
+                        <p className="text-gray-400 font-mono text-xs">TOP 3 순위 지정 (순서대로 선택):</p>
+                        {Array.from({ length: tiedTeamCount }, (_, rank) => rank).map((rank) => (
                           <div key={rank} className="flex items-center gap-3">
                             <span className="font-mono text-sm w-14 text-right">{rankLabel(rank)}</span>
                             <select
@@ -1622,7 +1623,7 @@ export default function AdminPage() {
               {teams.map((team) => (
                 <div
                   key={team.id}
-                  className="bg-[#1A2235] rounded-xl p-4 border border-[#00FF88]/10"
+                  className={`bg-[#1A2235] rounded-xl p-4 border ${team.isHidden ? "border-gray-600/30 opacity-50" : "border-[#00FF88]/10"}`}
                 >
                   {editingTeam?.id === team.id ? (
                     <div className="space-y-3">
@@ -1738,7 +1739,12 @@ export default function AdminPage() {
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">{team.emoji}</span>
                         <div>
-                          <div className="text-white font-mono font-semibold">{team.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-white font-mono font-semibold">{team.name}</span>
+                            {team.isHidden && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-600/30 text-gray-400 font-mono">숨김</span>
+                            )}
+                          </div>
                           <div className="text-gray-400 text-sm">{team.description}</div>
                         </div>
                       </div>
@@ -1749,6 +1755,21 @@ export default function AdminPage() {
                           <div>멤버: {team.memberUserIds.length}명</div>
                         </div>
                         <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              try {
+                                await callAdminApi("toggleTeamHidden", { teamId: team.id, isHidden: !team.isHidden });
+                                toast.success(team.isHidden ? "팀이 표시됩니다" : "팀이 숨겨집니다");
+                              } catch (e) {
+                                toast.error((e as Error).message);
+                              }
+                            }}
+                            className={team.isHidden ? "border-[#00FF88]/30 text-[#00FF88]" : "border-gray-600 text-gray-400"}
+                          >
+                            {team.isHidden ? "표시" : "숨기기"}
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -1919,6 +1940,22 @@ export default function AdminPage() {
                               >
                                 복사
                               </button>
+                              {(u.hasVoted || u.hasVotedP1 || u.hasVotedP2) && (
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(`${u.name}(${u.uniqueCode})의 투표를 초기화하시겠습니까?`)) return;
+                                    try {
+                                      await callAdminApi("resetUserVote", { userCode: u.uniqueCode });
+                                      toast.success("투표가 초기화되었습니다");
+                                    } catch (e) {
+                                      toast.error((e as Error).message);
+                                    }
+                                  }}
+                                  className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors"
+                                >
+                                  투표초기화
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleDeleteUser(u.uniqueCode, u.name)}
                                 className="text-xs text-gray-500 hover:text-red-400 transition-colors"
@@ -2281,7 +2318,7 @@ export default function AdminPage() {
               {/* All-complete leaderboard */}
               {(() => {
                 const allComplete = missionUsers.filter(
-                  (u) => u.completedCount === MISSIONS.length
+                  (u) => u.completedCount >= MISSIONS.length
                 );
                 if (allComplete.length === 0) return null;
                 return (
@@ -2341,7 +2378,7 @@ export default function AdminPage() {
                         <tr
                           key={u.uniqueCode}
                           className={`border-b border-[#1A2235] hover:bg-[#0A0E1A]/50 transition-colors ${
-                            u.completedCount === MISSIONS.length ? "bg-[#00FF88]/5" : ""
+                            u.completedCount >= MISSIONS.length ? "bg-[#00FF88]/5" : ""
                           }`}
                         >
                           <td className="p-3 text-white">{u.name}</td>
@@ -2388,7 +2425,7 @@ export default function AdminPage() {
                           <td className="text-center p-3">
                             <span
                               className={`font-bold ${
-                                u.completedCount === MISSIONS.length
+                                u.completedCount >= MISSIONS.length
                                   ? "text-[#00FF88]"
                                   : u.completedCount > 0
                                   ? "text-yellow-400"
@@ -2397,6 +2434,11 @@ export default function AdminPage() {
                             >
                               {u.completedCount}/{MISSIONS.length}
                             </span>
+                            {u.allMissionsCompletedAt && (
+                              <span className="text-[#00FF88] font-mono text-xs ml-2">
+                                완료: {new Date(u.allMissionsCompletedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );

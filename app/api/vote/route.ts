@@ -138,6 +138,12 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      if (snap.data()?.isHidden) {
+        return NextResponse.json(
+          { error: `숨겨진 팀에는 투표할 수 없습니다: ${snap.id}` },
+          { status: 400 }
+        );
+      }
     }
 
     // Atomic transaction: prevents TOCTOU race on duplicate vote check
