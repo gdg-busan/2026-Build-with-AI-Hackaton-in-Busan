@@ -11,7 +11,7 @@ import { EVENT_ID } from "@/lib/constants";
 import { ResultReveal } from "@/components/ResultReveal";
 import type { EventConfig, Team, TeamScore } from "@/lib/types";
 import { ChatPanel } from "@/components/chat/ChatPanel";
-import { AnnouncementTicker } from "@/components/AnnouncementTicker";
+import { AnnouncementManager } from "@/components/AnnouncementManager";
 import { MissionPanel } from "@/components/MissionPanel";
 
 function getRankLabel(rank: number) {
@@ -213,7 +213,7 @@ export default function ResultsPage() {
     return (
       <div className="min-h-screen bg-[#0A0E1A] dot-grid">
         <div className="sticky top-0 z-40">
-          <AnnouncementTicker />
+          <AnnouncementManager />
         </div>
         <div className="max-w-3xl mx-auto py-10 px-4">
           <motion.div
@@ -281,7 +281,7 @@ export default function ResultsPage() {
   return (
     <div className="min-h-screen bg-[#0A0E1A] dot-grid">
       <div className="sticky top-0 z-40">
-        <AnnouncementTicker />
+        <AnnouncementManager />
       </div>
       <div className="max-w-3xl mx-auto py-10 px-4">
         {/* Header */}
