@@ -68,7 +68,9 @@ export default function ResultsPage() {
           status: data.status,
           judgeWeight: data.judgeWeight ?? 0.8,
           participantWeight: data.participantWeight ?? 0.2,
-          maxVotesPerUser: data.maxVotesPerUser ?? 3,
+          maxVotesP1: data.maxVotesP1 ?? data.maxVotesPerUser ?? 3,
+          maxVotesP2: data.maxVotesP2 ?? data.maxVotesPerUser ?? 3,
+          maxVotesPerUser: data.maxVotesPerUser,
           votingDeadline: data.votingDeadline?.toDate() ?? null,
           title: data.title ?? "GDG Busan Hackathon",
           createdAt: data.createdAt?.toDate() ?? new Date(),
@@ -120,7 +122,7 @@ export default function ResultsPage() {
           selectedIds.length > 0 ? selectedIds : allTeams.map((t) => t.id)
         );
         // Apply manual ranking overrides if admin resolved ties, otherwise take top 3
-        const finalScores = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length === 3
+        const finalScores = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length > 0
           ? applyFinalRankingOverrides(computed, eventConfig.finalRankingOverrides)
           : computed.slice(0, 3);
         setScores(finalScores);

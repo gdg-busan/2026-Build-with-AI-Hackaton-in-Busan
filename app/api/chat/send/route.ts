@@ -90,22 +90,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Check if user is muted
+    // Rate limiting check
     const userRef = adminDb.doc(`events/${EVENT_ID}/users/${uniqueCode}`);
     const userSnap = await userRef.get();
     if (userSnap.exists) {
       const userData = userSnap.data()!;
-      if (userData.chatMutedUntil) {
-        const mutedUntil: Date =
-          userData.chatMutedUntil.toDate?.() ??
-          new Date(userData.chatMutedUntil);
-        if (mutedUntil > new Date()) {
-          return NextResponse.json(
-            { error: "현재 채팅이 제한된 상태입니다" },
-            { status: 403 }
-          );
-        }
-      }
 
       // Firestore-based rate limiting (1500ms between messages)
       const lastChatAt = userData.lastChatAt?.toDate?.() ?? null;

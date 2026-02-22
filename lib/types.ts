@@ -15,7 +15,9 @@ export interface EventConfig {
   status: EventStatus;
   judgeWeight: number;
   participantWeight: number;
-  maxVotesPerUser: number;
+  maxVotesP1: number;
+  maxVotesP2: number;
+  maxVotesPerUser?: number;
   votingDeadline: Date | null;
   autoCloseEnabled: boolean;
   timerDurationSec: number | null;
@@ -23,7 +25,7 @@ export interface EventConfig {
   createdAt: Date;
   phase1SelectedTeamIds?: string[];
   phase1FinalizedAt?: Date;
-  finalRankingOverrides?: string[]; // ordered [1st, 2nd, 3rd] teamIds for manual tie resolution
+  finalRankingOverrides?: string[]; // ordered teamIds for manual tie resolution (all tied positions)
 }
 
 export interface Team {

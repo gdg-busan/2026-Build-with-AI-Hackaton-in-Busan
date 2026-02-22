@@ -89,7 +89,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const maxVotesPerUser: number = eventData.maxVotesPerUser ?? 3;
+    // Use phase-specific limit with fallback to legacy maxVotesPerUser for backward compat
+    const maxVotesPerUser: number =
+      phase === "p1"
+        ? (eventData.maxVotesP1 ?? eventData.maxVotesPerUser ?? 3)
+        : (eventData.maxVotesP2 ?? eventData.maxVotesPerUser ?? 3);
 
     // Validate: selectedTeams count
     if (selectedTeams.length > maxVotesPerUser) {

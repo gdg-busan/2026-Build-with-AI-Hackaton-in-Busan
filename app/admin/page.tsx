@@ -15,7 +15,8 @@ import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { calculateScores, getTop10, calculateFinalScores, detectFinalTies } from "@/lib/scoring";
+import { calculateScores, getTop10, calculateFinalScores, detectFinalTies, getPhase1Results } from "@/lib/scoring";
+import type { TiedGroup, FinalTieGroup } from "@/lib/scoring";
 import { TEAM_EMOJIS, EVENT_ID } from "@/lib/constants";
 import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatRoom, Announcement } from "@/lib/types";
 import { MISSIONS } from "@/lib/missions";
@@ -65,7 +66,8 @@ export default function AdminPage() {
   const [configForm, setConfigForm] = useState({
     judgeWeight: 0.8,
     participantWeight: 0.2,
-    maxVotesPerUser: 3,
+    maxVotesP1: 3,
+    maxVotesP2: 3,
   });
 
   // Team form state
@@ -113,8 +115,11 @@ export default function AdminPage() {
   const [phase1Result, setPhase1Result] = useState<{
     selectedTeamIds: string[];
     tiedTeams: TiedTeam[] | null;
+    tiedGroups?: TiedGroup[];
+    hasTiedGroups?: boolean;
   } | null>(null);
   const [phase1ManualSelection, setPhase1ManualSelection] = useState<string[]>([]);
+  const [phase1Confirmed, setPhase1Confirmed] = useState(false);
   const [finalizingPhase1, setFinalizingPhase1] = useState(false);
 
   // Final tie resolution state
@@ -148,6 +153,8 @@ export default function AdminPage() {
           status: d.status,
           judgeWeight: d.judgeWeight,
           participantWeight: d.participantWeight,
+          maxVotesP1: d.maxVotesP1 ?? d.maxVotesPerUser ?? 3,
+          maxVotesP2: d.maxVotesP2 ?? d.maxVotesPerUser ?? 3,
           maxVotesPerUser: d.maxVotesPerUser,
           votingDeadline: d.votingDeadline?.toDate?.() || null,
           title: d.title || "",
@@ -161,7 +168,8 @@ export default function AdminPage() {
         setConfigForm({
           judgeWeight: d.judgeWeight,
           participantWeight: d.participantWeight,
-          maxVotesPerUser: d.maxVotesPerUser,
+          maxVotesP1: d.maxVotesP1 ?? d.maxVotesPerUser ?? 3,
+          maxVotesP2: d.maxVotesP2 ?? d.maxVotesPerUser ?? 3,
         });
       }
     });
@@ -483,24 +491,6 @@ export default function AdminPage() {
     }
   };
 
-  const handleMuteUser = async (userCode: string, duration: number) => {
-    try {
-      await callAdminApi("muteUser", { userCode, duration });
-      toast.success(`${duration}분 채팅 제한이 적용되었습니다.`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-
-  const handleUnmuteUser = async (userCode: string) => {
-    try {
-      await callAdminApi("unmuteUser", { userCode });
-      toast.success("채팅 제한이 해제되었습니다.");
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-
   const handleInitChatRooms = async () => {
     setSubmitting(true);
     try {
@@ -560,17 +550,24 @@ export default function AdminPage() {
 
   const handleFinalizePhase1 = async () => {
     setFinalizingPhase1(true);
+    setPhase1Confirmed(false);
     try {
       const result = await callAdminApi("finalizePhase1", {});
+      // Also compute tied groups locally for the UI
+      const phase1 = getPhase1Results(teams);
       setPhase1Result({
         selectedTeamIds: result.selectedTeamIds,
         tiedTeams: result.tiedTeams ?? null,
+        tiedGroups: phase1.tiedGroups,
+        hasTiedGroups: phase1.hasTiedGroups,
       });
-      if (!result.tiedTeams || result.tiedTeams.length === 0) {
-        toast.success("TOP 10이 자동 선정되었습니다.");
-      } else {
-        toast.warning("동점 팀이 있습니다. 수동으로 선정해주세요.");
+      if (result.tiedTeams && result.tiedTeams.length > 0) {
+        toast.warning("경계 동점 팀이 있습니다. 수동으로 선정해주세요.");
         setPhase1ManualSelection(result.selectedTeamIds);
+      } else if (phase1.hasTiedGroups) {
+        toast.warning("선정 팀 내 동점 그룹이 있습니다. 확인 후 확정해주세요.");
+      } else {
+        toast.success("TOP 10이 자동 선정되었습니다.");
       }
     } catch (e) {
       toast.error((e as Error).message);
@@ -598,8 +595,10 @@ export default function AdminPage() {
   };
 
   const handleResolveFinalTies = async () => {
-    if (finalTieRanking.length !== 3) {
-      toast.error("1위, 2위, 3위를 모두 선택해주세요.");
+    // Validate: all tied positions must be assigned
+    const hasBlanks = finalTieRanking.some((id) => !id);
+    if (hasBlanks || finalTieRanking.length === 0) {
+      toast.error("모든 동점 순위를 선택해주세요.");
       return;
     }
     setResolvingFinalTies(true);
@@ -643,6 +642,31 @@ export default function AdminPage() {
     const text = filtered.map((u) => `${u.uniqueCode}\t${u.name}\t${u.role}`).join("\n");
     navigator.clipboard.writeText(text);
     toast.success(`${filtered.length}개의 코드가 복사되었습니다.`);
+  };
+
+  const exportToCsv = (role?: UserRole) => {
+    const filtered = role ? users.filter((u) => u.role === role) : users;
+    const headers = ["코드", "이름", "역할", "팀", "1차투표", "2차투표"];
+    const rows = filtered.map((u) => {
+      const team = teams.find((t) => t.id === u.teamId);
+      const teamName = team ? `${team.emoji} ${team.name}` : "미배정";
+      const roleName = u.role === "admin" ? "관리자" : u.role === "judge" ? "심사위원" : "참가자";
+      return [u.uniqueCode, u.name, roleName, teamName, u.hasVotedP1 ? "Y" : "N", u.hasVotedP2 ? "Y" : "N"];
+    });
+
+    const bom = "\uFEFF";
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+
+    const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const roleLabel = role === "participant" ? "참가자" : role === "judge" ? "심사위원" : "전체";
+    const date = new Date().toISOString().split("T")[0];
+    link.href = url;
+    link.download = `users_${roleLabel}_${date}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${filtered.length}명의 데이터가 내보내기되었습니다.`);
   };
 
   if (loading) {
@@ -840,11 +864,11 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {/* Tie resolution UI */}
+                {/* Tie resolution UI - boundary ties */}
                 {phase1Result?.tiedTeams && phase1Result.tiedTeams.length > 0 && (
                   <div className="space-y-4">
                     <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                      <p className="text-yellow-400 font-mono text-sm font-semibold mb-1">동점 발생!</p>
+                      <p className="text-yellow-400 font-mono text-sm font-semibold mb-1">경계 동점 발생!</p>
                       <p className="text-yellow-400/70 font-mono text-xs">
                         아래 팀들이 동점입니다. 총 {Math.min(10, teams.length)}개 팀을 수동으로 선택해주세요.
                         (현재 확실히 선정된 팀: {phase1Result.selectedTeamIds.length}개)
@@ -917,6 +941,80 @@ export default function AdminPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Internal tied groups confirmation - shown when no boundary ties but teams share vote counts */}
+                {phase1Result && !phase1Result.tiedTeams && phase1Result.hasTiedGroups && !phase1Confirmed && (
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-lg bg-[#FF6B35]/10 border border-[#FF6B35]/30">
+                      <p className="text-[#FF6B35] font-mono text-sm font-semibold mb-1">동점 그룹 확인 필요</p>
+                      <p className="text-[#FF6B35]/70 font-mono text-xs">
+                        선정된 팀 중 동일한 득표수를 가진 그룹이 있습니다. 확인 후 확정해주세요.
+                      </p>
+                    </div>
+
+                    {/* Show selected teams with tied groups highlighted */}
+                    <div className="space-y-3">
+                      <p className="text-gray-400 font-mono text-xs mb-1">선정 팀 ({phase1Result.selectedTeamIds.length}개):</p>
+                      <div className="space-y-2">
+                        {phase1Result.selectedTeamIds.map((teamId) => {
+                          const team = teams.find((t) => t.id === teamId);
+                          if (!team) return null;
+                          const inTiedGroup = phase1Result.tiedGroups?.some((g) =>
+                            g.teams.some((gt) => gt.id === teamId)
+                          );
+                          return (
+                            <div key={teamId} className={`flex items-center gap-3 p-2 rounded-lg ${inTiedGroup ? "bg-[#FF6B35]/10 border border-[#FF6B35]/20" : "bg-[#0A0E1A]/50"}`}>
+                              <span className="text-lg">{team.emoji}</span>
+                              <span className="font-mono text-sm text-white">{team.name}</span>
+                              <span className={`font-mono text-xs ${inTiedGroup ? "text-[#FF6B35]" : "text-gray-500"}`}>
+                                {team.participantVoteCount}표 {inTiedGroup && "(동점)"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Tied groups detail */}
+                    {phase1Result.tiedGroups && phase1Result.tiedGroups.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-gray-400 font-mono text-xs">동점 그룹:</p>
+                        {phase1Result.tiedGroups.map((group, gi) => (
+                          <div key={gi} className="p-2 rounded-lg bg-[#FF6B35]/5 border border-[#FF6B35]/10">
+                            <span className="text-[#FF6B35] font-mono text-xs font-semibold">{group.voteCount}표 ({group.teams.length}팀)</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {group.teams.map((t) => (
+                                <span key={t.id} className="px-2 py-0.5 bg-[#FF6B35]/10 rounded font-mono text-xs text-[#FF6B35]">
+                                  {t.emoji} {t.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <Button
+                        onClick={() => {
+                          setPhase1Confirmed(true);
+                          toast.success("TOP 10 선정이 확정되었습니다.");
+                        }}
+                        className="font-mono bg-[#00FF88] text-[#0A0E1A] hover:bg-[#00FF88]/90"
+                      >
+                        확정
+                      </Button>
+                      <Button
+                        onClick={handleFinalizePhase1}
+                        disabled={finalizingPhase1}
+                        variant="outline"
+                        className="font-mono text-xs border-gray-600 text-gray-400 hover:bg-gray-800"
+                      >
+                        재선정
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -945,10 +1043,15 @@ export default function AdminPage() {
                 eventConfig.participantWeight,
                 eventConfig.phase1SelectedTeamIds!
               );
-              const tiedTeams = detectFinalTies(finalScores);
-              const hasOverrides = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length === 3;
+              const { tiedTeams, tieGroups } = detectFinalTies(finalScores);
+              const hasOverrides = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length > 0;
 
               if (!tiedTeams && !hasOverrides) return null;
+
+              // Count total tied teams for the ranking selectors
+              const tiedTeamCount = tiedTeams ? tiedTeams.length : 0;
+              const medals = ["🥇", "🥈", "🥉"];
+              const rankLabel = (i: number) => `${medals[i] || "🏅"} ${i + 1}위`;
 
               return (
                 <div className="bg-[#1A2235] rounded-xl p-6 border border-[#FF6B35]/20">
@@ -963,10 +1066,9 @@ export default function AdminPage() {
                         {eventConfig.finalRankingOverrides!.map((teamId, i) => {
                           const team = teams.find((t) => t.id === teamId);
                           const score = finalScores.find((s) => s.teamId === teamId);
-                          const medals = ["🥇", "🥈", "🥉"];
                           return team ? (
                             <div key={teamId} className="flex items-center gap-3 p-2 rounded-lg bg-[#0A0E1A]/50">
-                              <span className="text-lg">{medals[i]}</span>
+                              <span className="text-lg">{medals[i] || "🏅"}</span>
                               <span className="font-mono text-sm text-white">{team.emoji} {team.name}</span>
                               <span className="text-gray-500 font-mono text-xs ml-auto">{score?.finalScore.toFixed(2)}점</span>
                             </div>
@@ -994,21 +1096,23 @@ export default function AdminPage() {
                   ) : tiedTeams ? (
                     <div className="space-y-4">
                       <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                        <p className="text-yellow-400 font-mono text-sm font-semibold mb-1">동점 발생! ({finalScores.length}팀 후보)</p>
+                        <p className="text-yellow-400 font-mono text-sm font-semibold mb-1">동점 발생! ({tiedTeamCount}팀 동점)</p>
                         <p className="text-yellow-400/70 font-mono text-xs">
-                          동점인 팀이 있습니다. 후보 {finalScores.length}팀 중 1위~3위를 직접 지정해주세요.
+                          동점인 팀이 있습니다. 동점 팀들의 순위를 직접 지정해주세요.
                         </p>
                       </div>
 
+                      {/* All teams list with tie groups highlighted */}
                       <div className="space-y-2">
-                        <p className="text-gray-400 font-mono text-xs mb-1">TOP 3 팀 (동점 포함):</p>
+                        <p className="text-gray-400 font-mono text-xs mb-1">전체 팀 순위 ({finalScores.length}팀):</p>
                         {finalScores.map((score) => {
                           const isTied = tiedTeams.some((t) => t.teamId === score.teamId);
                           return (
                             <div key={score.teamId} className={`flex items-center gap-3 p-2 rounded-lg ${isTied ? "bg-yellow-500/10 border border-yellow-500/20" : "bg-[#0A0E1A]/50"}`}>
+                              <span className="font-mono text-xs text-gray-500 w-6 text-right">{score.rank}</span>
                               <span className="text-lg">{score.emoji}</span>
                               <span className="font-mono text-sm text-white">{score.teamName}</span>
-                              <span className={`font-mono text-xs ${isTied ? "text-yellow-400" : "text-gray-500"}`}>
+                              <span className={`font-mono text-xs ml-auto ${isTied ? "text-yellow-400" : "text-gray-500"}`}>
                                 {score.finalScore.toFixed(2)}점 {isTied && "(동점)"}
                               </span>
                             </div>
@@ -1016,43 +1120,64 @@ export default function AdminPage() {
                         })}
                       </div>
 
-                      <div className="space-y-2">
-                        <p className="text-gray-400 font-mono text-xs">순위 지정 (1위 → 2위 → 3위 순서로 선택):</p>
-                        {[0, 1, 2].map((rank) => {
-                          const medals = ["🥇 1위", "🥈 2위", "🥉 3위"];
-                          return (
-                            <div key={rank} className="flex items-center gap-3">
-                              <span className="font-mono text-sm w-12 text-right">{medals[rank]}</span>
-                              <select
-                                className="flex-1 bg-[#0A0E1A] border border-gray-600 rounded-lg px-3 py-2 font-mono text-sm text-white"
-                                value={finalTieRanking[rank] ?? ""}
-                                onChange={(e) => {
-                                  setFinalTieRanking((prev) => {
-                                    const next = [...prev];
-                                    next[rank] = e.target.value;
-                                    return next.filter(Boolean);
-                                  });
-                                }}
-                              >
-                                <option value="">선택하세요</option>
-                                {finalScores.map((s) => (
-                                  <option
-                                    key={s.teamId}
-                                    value={s.teamId}
-                                    disabled={finalTieRanking.includes(s.teamId) && finalTieRanking[rank] !== s.teamId}
-                                  >
-                                    {s.emoji} {s.teamName} ({s.finalScore.toFixed(2)}점)
-                                  </option>
+                      {/* Tie groups detail */}
+                      {tieGroups.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-gray-400 font-mono text-xs">동점 그룹:</p>
+                          {tieGroups.map((group, gi) => (
+                            <div key={gi} className="p-2 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
+                              <span className="text-yellow-400 font-mono text-xs font-semibold">
+                                {(group.roundedScore / 100).toFixed(2)}점 ({group.teams.length}팀)
+                              </span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {group.teams.map((t) => (
+                                  <span key={t.teamId} className="px-2 py-0.5 bg-yellow-500/10 rounded font-mono text-xs text-yellow-400">
+                                    {t.emoji} {t.teamName}
+                                  </span>
                                 ))}
-                              </select>
+                              </div>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Ranking selectors for ALL tied positions */}
+                      <div className="space-y-2">
+                        <p className="text-gray-400 font-mono text-xs">동점 팀 순위 지정 (순서대로 선택):</p>
+                        {tiedTeams.map((_, rank) => (
+                          <div key={rank} className="flex items-center gap-3">
+                            <span className="font-mono text-sm w-14 text-right">{rankLabel(rank)}</span>
+                            <select
+                              className="flex-1 bg-[#0A0E1A] border border-gray-600 rounded-lg px-3 py-2 font-mono text-sm text-white"
+                              value={finalTieRanking[rank] ?? ""}
+                              onChange={(e) => {
+                                setFinalTieRanking((prev) => {
+                                  const next = [...prev];
+                                  next[rank] = e.target.value;
+                                  // Remove empty entries but keep order
+                                  while (next.length > 0 && !next[next.length - 1]) next.pop();
+                                  return next;
+                                });
+                              }}
+                            >
+                              <option value="">선택하세요</option>
+                              {tiedTeams.map((s) => (
+                                <option
+                                  key={s.teamId}
+                                  value={s.teamId}
+                                  disabled={finalTieRanking.includes(s.teamId) && finalTieRanking[rank] !== s.teamId}
+                                >
+                                  {s.emoji} {s.teamName} ({s.finalScore.toFixed(2)}점)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
                       </div>
 
                       <Button
                         onClick={handleResolveFinalTies}
-                        disabled={resolvingFinalTies || finalTieRanking.length !== 3}
+                        disabled={resolvingFinalTies || finalTieRanking.filter(Boolean).length !== tiedTeamCount}
                         className="font-mono bg-[#FF6B35] text-white hover:bg-[#FF6B35]/90"
                       >
                         {resolvingFinalTies ? "처리 중..." : "최종 순위 확정"}
@@ -1360,20 +1485,37 @@ export default function AdminPage() {
                     )}
                   </div>
                   <div>
-                    <label className="text-gray-400 font-mono text-xs block mb-1">최대 투표 수</label>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">1차 최대 투표 수</label>
                     {editingConfig ? (
                       <Input
                         type="number"
                         min="1"
                         max="10"
-                        value={configForm.maxVotesPerUser}
+                        value={configForm.maxVotesP1}
                         onChange={(e) =>
-                          setConfigForm((p) => ({ ...p, maxVotesPerUser: parseInt(e.target.value) }))
+                          setConfigForm((p) => ({ ...p, maxVotesP1: parseInt(e.target.value) }))
                         }
                         className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
                       />
                     ) : (
-                      <div className="text-white font-mono text-lg">{eventConfig.maxVotesPerUser}</div>
+                      <div className="text-white font-mono text-lg">{eventConfig.maxVotesP1 ?? eventConfig.maxVotesPerUser ?? 3}</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-gray-400 font-mono text-xs block mb-1">2차 최대 투표 수</label>
+                    {editingConfig ? (
+                      <Input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={configForm.maxVotesP2}
+                        onChange={(e) =>
+                          setConfigForm((p) => ({ ...p, maxVotesP2: parseInt(e.target.value) }))
+                        }
+                        className="font-mono bg-[#0A0E1A] border-[#00FF88]/20"
+                      />
+                    ) : (
+                      <div className="text-white font-mono text-lg">{eventConfig.maxVotesP2 ?? eventConfig.maxVotesPerUser ?? 3}</div>
                     )}
                   </div>
                 </div>
@@ -1679,7 +1821,7 @@ export default function AdminPage() {
                 <h2 className="text-[#00FF88] font-mono font-semibold">
                   사용자 목록 ({users.length})
                 </h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button size="sm" variant="outline" onClick={() => copyAllCodes()}>
                     전체 복사
                   </Button>
@@ -1688,6 +1830,15 @@ export default function AdminPage() {
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => copyAllCodes("judge")}>
                     심사위원 복사
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => exportToCsv()}>
+                    전체 내보내기
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => exportToCsv("participant")}>
+                    참가자 내보내기
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => exportToCsv("judge")}>
+                    심사위원 내보내기
                   </Button>
                 </div>
               </div>
@@ -1700,7 +1851,6 @@ export default function AdminPage() {
                       <th className="text-left p-3">역할</th>
                       <th className="text-left p-3">팀</th>
                       <th className="text-left p-3">투표</th>
-                      <th className="text-left p-3">채팅</th>
                       <th className="text-left p-3">액션</th>
                     </tr>
                   </thead>
@@ -1760,27 +1910,6 @@ export default function AdminPage() {
                             >
                               {u.hasVoted ? "완료" : "미투표"}
                             </span>
-                          </td>
-                          <td className="p-3">
-                            {u.role !== "admin" && (() => {
-                              const mutedUntil = (u as User & { chatMutedUntil?: Date }).chatMutedUntil;
-                              const isMuted = mutedUntil && new Date(mutedUntil) > new Date();
-                              return isMuted ? (
-                                <button
-                                  onClick={() => handleUnmuteUser(u.uniqueCode)}
-                                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
-                                >
-                                  뮤트해제
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleMuteUser(u.uniqueCode, 10)}
-                                  className="text-xs text-gray-400 hover:text-[#FF6B35] transition-colors"
-                                >
-                                  10분뮤트
-                                </button>
-                              );
-                            })()}
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-2">

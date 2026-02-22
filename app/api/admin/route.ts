@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
             status: "waiting",
             judgeWeight: 0.8,
             participantWeight: 0.2,
-            maxVotesPerUser: 3,
+            maxVotesP1: 3,
+            maxVotesP2: 3,
             title: "GDG Busan - Build with AI",
             createdAt: FieldValue.serverTimestamp(),
           });
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
             eventData?.participantWeight ?? 0.2,
             phase1SelectedTeamIds
           );
-          const tiedTeams = detectFinalTies(finalScores);
+          const { tiedTeams } = detectFinalTies(finalScores);
           if (tiedTeams && tiedTeams.length > 0 && (!finalRankingOverrides || finalRankingOverrides.length === 0)) {
             return NextResponse.json(
               {
@@ -166,11 +167,17 @@ export async function POST(request: NextRequest) {
       }
 
       case "updateEventConfig": {
-        const { judgeWeight, participantWeight, maxVotesPerUser } = data;
+        const { judgeWeight, participantWeight, maxVotesP1, maxVotesP2, maxVotesPerUser } = data;
         const updateData: Record<string, number> = {};
         if (judgeWeight !== undefined) updateData.judgeWeight = judgeWeight;
         if (participantWeight !== undefined) updateData.participantWeight = participantWeight;
-        if (maxVotesPerUser !== undefined) updateData.maxVotesPerUser = maxVotesPerUser;
+        if (maxVotesP1 !== undefined) updateData.maxVotesP1 = maxVotesP1;
+        if (maxVotesP2 !== undefined) updateData.maxVotesP2 = maxVotesP2;
+        // backward compat: accept legacy field but prefer new fields
+        if (maxVotesPerUser !== undefined && maxVotesP1 === undefined && maxVotesP2 === undefined) {
+          updateData.maxVotesP1 = maxVotesPerUser;
+          updateData.maxVotesP2 = maxVotesPerUser;
+        }
         await eventRef().update(updateData);
         return NextResponse.json({ success: true });
       }
@@ -754,19 +761,6 @@ export async function POST(request: NextRequest) {
           deleted: true,
           deletedBy: admin.uid,
         });
-        return NextResponse.json({ success: true });
-      }
-
-      case "muteUser": {
-        const { userCode, duration } = data as { userCode: string; duration: number };
-        const mutedUntil = new Date(Date.now() + duration * 60 * 1000);
-        await usersCol().doc(userCode).update({ chatMutedUntil: mutedUntil });
-        return NextResponse.json({ success: true, mutedUntil });
-      }
-
-      case "unmuteUser": {
-        const { userCode } = data as { userCode: string };
-        await usersCol().doc(userCode).update({ chatMutedUntil: null });
         return NextResponse.json({ success: true });
       }
 
