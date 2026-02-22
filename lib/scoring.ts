@@ -204,24 +204,30 @@ export function detectFinalTies(scores: TeamScore[]): {
 }
 
 /** Apply manual ranking overrides to final scores.
- *  Overrides specify ordered teamIds for tied positions.
- *  Non-overridden teams keep their original rank order after overridden ones.
+ *  Overrides reorder only the tied positions in-place.
+ *  Teams not in overrides keep their original ranks untouched.
  */
 export function applyFinalRankingOverrides(
   scores: TeamScore[],
   overrides: string[]
 ): TeamScore[] {
-  const overridden = overrides.map((teamId, i) => {
-    const score = scores.find((s) => s.teamId === teamId);
-    if (!score) return null;
-    return { ...score, rank: i + 1 };
-  }).filter((s): s is TeamScore => s !== null);
+  if (overrides.length === 0) return scores;
 
-  const overriddenIds = new Set(overrides);
-  const remaining = scores
-    .filter((s) => !overriddenIds.has(s.teamId))
-    .sort((a, b) => a.rank - b.rank)
-    .map((s, i) => ({ ...s, rank: overrides.length + i + 1 }));
+  // Find the original ranks of the overridden teams
+  const overriddenOriginalRanks = overrides
+    .map((id) => scores.find((s) => s.teamId === id))
+    .filter((s): s is TeamScore => s !== null)
+    .map((s) => s.rank)
+    .sort((a, b) => a - b);
 
-  return [...overridden, ...remaining];
+  // Assign the sorted original rank slots to the override order
+  const result = scores.map((s) => {
+    const overrideIndex = overrides.indexOf(s.teamId);
+    if (overrideIndex !== -1 && overrideIndex < overriddenOriginalRanks.length) {
+      return { ...s, rank: overriddenOriginalRanks[overrideIndex] };
+    }
+    return { ...s };
+  });
+
+  return result.sort((a, b) => a.rank - b.rank);
 }

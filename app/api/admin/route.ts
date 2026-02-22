@@ -363,9 +363,9 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: true, rankedTeamIds: [] });
         }
 
-        if (rankedTeamIds.length !== 3) {
+        if (rankedTeamIds.length < 2) {
           return NextResponse.json(
-            { error: "rankedTeamIds must be exactly 3 team IDs (1st, 2nd, 3rd) or empty to reset" },
+            { error: "rankedTeamIds must contain at least 2 team IDs or be empty to reset" },
             { status: 400 }
           );
         }
