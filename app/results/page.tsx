@@ -13,6 +13,7 @@ import type { EventConfig, Team, TeamScore } from "@/lib/types";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { AnnouncementManager } from "@/components/AnnouncementManager";
 import { MissionPanel } from "@/components/MissionPanel";
+import { gaResultsView, gaRevealComplete } from "@/lib/gtag";
 
 function getRankLabel(rank: number) {
   if (rank === 1) return "🥇";
@@ -130,6 +131,7 @@ export default function ResultsPage() {
         setRevealPhase("final");
       }
       setShowReveal(true);
+      gaResultsView(eventConfig.status === "revealed_p1" ? "p1" : "final");
     };
 
     fetchAndScore();
@@ -199,6 +201,7 @@ export default function ResultsPage() {
         p1Teams={revealPhase === "p1" ? p1Teams : undefined}
         scores={revealPhase === "final" ? scores : undefined}
         onComplete={() => {
+          gaRevealComplete(revealPhase);
           setShowReveal(false);
           setRevealComplete(true);
         }}

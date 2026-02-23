@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import type { Team, MemberProfile } from "@/lib/types";
 import { FeedbackBoard } from "@/components/FeedbackBoard";
+import { gaExternalLinkClick } from "@/lib/gtag";
 
 interface CheerEntry {
   id: string;
@@ -209,6 +210,7 @@ export function TeamDetailSheet({
                 href={team.projectUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => gaExternalLinkClick("project", team.id)}
                 className="flex items-center gap-2 px-4 py-3 rounded-lg border border-[#4DAFFF]/20 bg-[#4DAFFF]/5 hover:bg-[#4DAFFF]/10 transition-colors group"
               >
                 <ExternalLink className="w-4 h-4 text-[#4DAFFF] group-hover:text-[#4DAFFF]" />
@@ -247,6 +249,7 @@ export function TeamDetailSheet({
                     href={team.demoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => gaExternalLinkClick("demo", team.id)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#FF6B35]/20 bg-[#FF6B35]/5 hover:bg-[#FF6B35]/10 transition-colors group"
                   >
                     <Monitor className="w-3.5 h-3.5 text-[#FF6B35]" />
@@ -259,6 +262,7 @@ export function TeamDetailSheet({
                     href={team.githubUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => gaExternalLinkClick("github", team.id)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/40 bg-background/50 hover:bg-white/5 transition-colors group"
                   >
                     <Github className="w-3.5 h-3.5 text-foreground/70" />

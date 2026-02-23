@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import { getFirebaseAuth } from "@/lib/firebase";
 import type { Team } from "@/lib/types";
+import { gaTeamEdit } from "@/lib/gtag";
 import {
   Dialog,
   DialogContent,
@@ -90,6 +91,7 @@ export function TeamEditDialog({ open, onOpenChange, team }: TeamEditDialogProps
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "팀 정보 수정에 실패했습니다");
 
+      gaTeamEdit();
       toast.success("팀 정보가 수정되었습니다!");
       onOpenChange(false);
     } catch (err) {

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, JetBrains_Mono } from "next/font/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { Toaster } from "sonner";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -54,6 +55,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" suppressHydrationWarning>
+      {process.env.NEXT_PUBLIC_GA_ID && (
+        <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
+      )}
       <body
         suppressHydrationWarning
         className={`${dmSans.variable} ${jetbrainsMono.variable} antialiased min-h-screen dot-grid`}
