@@ -14,12 +14,27 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = "https://two026-build-with-ai-hackaton-in-busan.onrender.com";
+
 export const metadata: Metadata = {
   title: "GDG Busan - Build with AI | Vote",
   description:
     "GDG Busan 해커톤 투표 플랫폼 - 최고의 AI 프로젝트에 투표하세요!",
   icons: {
     icon: "/favicon.ico",
+  },
+  openGraph: {
+    title: "GDG Busan - Build with AI 2026",
+    description: "25팀의 AI 프로젝트 중 최고를 투표하세요! 🗳️",
+    url: siteUrl,
+    siteName: "GDG Busan Hackathon Vote",
+    locale: "ko_KR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "GDG Busan - Build with AI 2026",
+    description: "25팀의 AI 프로젝트 중 최고를 투표하세요!",
   },
 };
 
