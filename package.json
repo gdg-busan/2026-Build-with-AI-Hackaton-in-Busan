@@ -29,6 +29,7 @@
     "tailwind-merge": "^3.4.1"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.8",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/canvas-confetti": "^1.9.0",

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  ...(process.env.NETLIFY ? {} : { output: "standalone" }),
 };
 
 export default nextConfig;
