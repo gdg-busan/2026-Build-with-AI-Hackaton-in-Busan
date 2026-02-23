@@ -17,6 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 const siteUrl = "https://two026-build-with-ai-hackaton-in-busan.onrender.com";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "GDG Busan - Build with AI | Vote",
   description:
     "GDG Busan 해커톤 투표 플랫폼 - 최고의 AI 프로젝트에 투표하세요!",
