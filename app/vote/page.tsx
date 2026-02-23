@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/auth-context";
 import { EVENT_ID } from "@/lib/constants";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import type { EventConfig, MemberProfile, Team } from "@/lib/types";
+import { gaTeamSelect, gaTeamInspect, gaVoteConfirmOpen, gaVoteSubmit, gaVoteFailed, gaLogout } from "@/lib/gtag";
 import { cn } from "@/lib/utils";
 import {
   collection,
@@ -260,6 +261,7 @@ export default function VotePage() {
   const handleInspect = useCallback(
     (team: Team) => {
       setInspectTeam(team);
+      gaTeamInspect(team.id);
       updateUniqueProgress("visit_all_teams", team.id, teams.length);
     },
     [updateUniqueProgress, teams.length],
@@ -273,12 +275,14 @@ export default function VotePage() {
           : (eventConfig?.maxVotesP1 ?? eventConfig?.maxVotesPerUser ?? 3);
       setSelectedTeams((prev) => {
         if (prev.includes(teamId)) {
+          gaTeamSelect(teamId, false);
           return prev.filter((id) => id !== teamId);
         }
         if (prev.length >= maxVotes) {
           toast.error(`최대 ${maxVotes}팀까지 선택할 수 있습니다`);
           return prev;
         }
+        gaTeamSelect(teamId, true);
         return [...prev, teamId];
       });
     },
@@ -341,6 +345,7 @@ export default function VotePage() {
 
       setConfirmOpen(false);
       setVoteSuccess(true);
+      gaVoteSubmit(selectedTeams.length, user?.role ?? "unknown");
       toast.success("투표가 완료되었습니다!");
       updateProgress("first_vote", 1);
 
@@ -353,7 +358,9 @@ export default function VotePage() {
         colors: ["#00FF88", "#00CC66", "#00FF88", "#ffffff"],
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "투표에 실패했습니다");
+      const msg = err instanceof Error ? err.message : "투표에 실패했습니다";
+      gaVoteFailed(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -584,6 +591,7 @@ export default function VotePage() {
               variant="ghost"
               size="sm"
               onClick={async () => {
+                gaLogout();
                 await logout();
                 router.replace("/");
               }}
@@ -688,7 +696,7 @@ export default function VotePage() {
             <Button
               size="lg"
               disabled={selectedTeams.length === 0}
-              onClick={() => setConfirmOpen(true)}
+              onClick={() => { gaVoteConfirmOpen(selectedTeams.length); setConfirmOpen(true); }}
               className="font-mono px-10"
             >
               $ submit_vote ({selectedTeams.length}팀)

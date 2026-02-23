@@ -6,6 +6,7 @@ import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { EVENT_ID } from "@/lib/constants";
 import { sendCheer } from "@/lib/client-actions";
+import { gaCheerSend } from "@/lib/gtag";
 import { toast } from "sonner";
 
 const EMOJIS = ["🔥", "❤️", "👏", "🎉"];
@@ -48,6 +49,7 @@ export function CheerButton({ teamId }: CheerButtonProps) {
 
     try {
       await sendCheer(teamId, emoji, user.uid, user.name);
+      gaCheerSend(teamId, emoji);
     } catch {
       toast.error("응원에 실패했습니다");
     }

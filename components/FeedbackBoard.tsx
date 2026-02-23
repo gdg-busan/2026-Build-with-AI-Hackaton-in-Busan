@@ -8,6 +8,7 @@ import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { EVENT_ID } from "@/lib/constants";
 import { sendFeedback } from "@/lib/client-actions";
+import { gaFeedbackSend, gaFeedbackReply } from "@/lib/gtag";
 import type { TeamFeedback } from "@/lib/types";
 
 interface FeedbackBoardProps {
@@ -90,6 +91,7 @@ export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
       });
 
       setText("");
+      gaFeedbackSend(teamId, type);
       toast.success("피드백이 전송되었습니다!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "피드백 전송에 실패했습니다");
@@ -120,6 +122,7 @@ export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
 
       setReplyInputs((prev) => ({ ...prev, [feedbackId]: "" }));
       setReplyingTo(null);
+      gaFeedbackReply(teamId);
       toast.success("답글이 등록되었습니다!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "답글 작성에 실패했습니다");

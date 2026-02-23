@@ -7,6 +7,7 @@ import { EVENT_ID } from "@/lib/constants";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth-context";
 import { useMissions } from "@/hooks/useMissions";
+import { gaMissionPanelOpen } from "@/lib/gtag";
 import { MISSIONS } from "@/lib/missions";
 
 export function MissionPanel() {
@@ -44,7 +45,7 @@ export function MissionPanel() {
     <>
       {/* Floating trophy button - bottom LEFT */}
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { gaMissionPanelOpen(); setOpen(true); }}
         className="fixed bottom-6 left-6 z-50 w-14 h-14 rounded-full bg-card border border-primary/40 shadow-lg flex items-center justify-center hover:border-primary transition-colors hover:shadow-[0_0_16px_rgba(0,255,136,0.3)] group"
         aria-label="미션 보기"
       >

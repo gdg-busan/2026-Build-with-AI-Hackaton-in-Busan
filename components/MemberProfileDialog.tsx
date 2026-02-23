@@ -6,6 +6,7 @@ import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { EVENT_ID } from "@/lib/constants";
 import { useAuth } from "@/lib/auth-context";
+import { gaProfileEdit } from "@/lib/gtag";
 import {
   Dialog,
   DialogContent,
@@ -75,6 +76,7 @@ export function MemberProfileDialog({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "프로필 수정에 실패했습니다");
 
+      gaProfileEdit();
       toast.success("프로필이 저장되었습니다!");
       onOpenChange(false);
     } catch (err) {

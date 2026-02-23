@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, type KeyboardEvent } from "react";
 import { Send } from "lucide-react";
+import { gaChatMessage } from "@/lib/gtag";
 
 interface ChatComposerProps {
   onSend: (text: string) => Promise<void>;
@@ -21,6 +22,7 @@ export function ChatComposer({ onSend, disabled, placeholder = "메시지를 입
     setSending(true);
     try {
       await onSend(trimmed);
+      gaChatMessage();
       setText("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "36px";

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { gaLogin, gaLoginFailed } from "@/lib/gtag";
 import { TypeWriter } from "@/components/TypeWriter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,8 +36,11 @@ export default function LoginPage() {
 
       try {
         await login(code.trim().toUpperCase());
+        gaLogin("unknown");
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "인증에 실패했습니다");
+        const msg = err instanceof Error ? err.message : "인증에 실패했습니다";
+        gaLoginFailed(msg);
+        setError(msg);
       } finally {
         setIsLoading(false);
       }
