@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -11,6 +11,22 @@ export default defineConfig({
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
   },
+  projects: [
+    {
+      name: "desktop",
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "iphone14",
+      use: { ...devices["iPhone 14"] },
+    },
+    {
+      name: "ipad",
+      use: {
+        ...devices["iPad (gen 7)"],
+      },
+    },
+  ],
   webServer: {
     command: "pnpm dev",
     url: "http://localhost:3000",
