@@ -132,7 +132,7 @@ export default function AdminPage() {
   const [customMinutes, setCustomMinutes] = useState(10);
   const [targetTime, setTargetTime] = useState("");
   const timer = useVotingTimer(eventConfig);
-  const autoCloseTriggeredRef = useRef(false);
+  const autoClosedDeadlineRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "admin")) {
@@ -309,29 +309,34 @@ export default function AdminPage() {
   );
 
   // Auto-advance: when timer expires and autoCloseEnabled, advance to next status
+  // Track by deadline timestamp to prevent cascade (same expired deadline won't trigger twice)
   useEffect(() => {
+    const currentDeadline = eventConfig?.votingDeadline?.getTime() ?? null;
     if (
       timer.isExpired &&
       eventConfig?.autoCloseEnabled &&
       eventConfig?.status &&
       NEXT_STATUS_MAP[eventConfig.status] &&
-      !autoCloseTriggeredRef.current
+      currentDeadline !== null &&
+      autoClosedDeadlineRef.current !== currentDeadline
     ) {
       const next = NEXT_STATUS_MAP[eventConfig.status]!;
       const currentStatus = eventConfig.status;
-      autoCloseTriggeredRef.current = true;
+      autoClosedDeadlineRef.current = currentDeadline;
       callAdminApi("updateEventStatus", { status: next.status })
         .then(async () => {
           toast.success(next.message);
-          // waiting → voting 전환 시 타이머 리셋 (연쇄 전환 방지)
+          // waiting → voting 전환 시 타이머 리셋
           if (currentStatus === "waiting") {
             await callAdminApi("resetTimer", {});
           }
         })
-        .catch((e: Error) => toast.error(`자동 전환 실패: ${e.message}`))
-        .finally(() => { autoCloseTriggeredRef.current = false; });
+        .catch((e: Error) => {
+          toast.error(`자동 전환 실패: ${e.message}`);
+          autoClosedDeadlineRef.current = null; // 실패 시에만 리셋하여 재시도 허용
+        });
     }
-  }, [timer.isExpired, eventConfig?.autoCloseEnabled, eventConfig?.status, callAdminApi]);
+  }, [timer.isExpired, eventConfig?.autoCloseEnabled, eventConfig?.status, eventConfig?.votingDeadline, callAdminApi]);
 
   const handleStatusChange = async (newStatus: EventStatus) => {
     if (!eventConfig || eventConfig.status === newStatus) return;
