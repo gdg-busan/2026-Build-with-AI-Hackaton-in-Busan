@@ -31,7 +31,7 @@ description: API 라우트 보안 패턴 검증. API 라우트 추가/수정 후
 | `app/api/chat/rooms/route.ts` | 채팅방 목록 조회 (인증 필요) |
 | `app/api/chat/send/route.ts` | 채팅 메시지 전송 (인증 필요) |
 | `firebase/firestore.rules` | Firestore 보안 규칙 |
-| `lib/firebase-admin.ts` | Admin SDK (verifyIdToken, adminDb) |
+| `src/shared/api/firebase-admin.ts` | Admin SDK (verifyIdToken, adminDb) |
 
 ## Workflow
 

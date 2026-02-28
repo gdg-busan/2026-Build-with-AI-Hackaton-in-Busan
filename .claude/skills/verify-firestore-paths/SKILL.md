@@ -13,15 +13,15 @@ description: Firestore 경로 일관성 검증. Firestore 접근 코드 수정 �
 
 - Firestore 접근 코드를 추가하거나 수정한 후
 - 새 페이지나 API 라우트에서 Firestore를 사용하는 코드를 작성한 후
-- `lib/firebase.ts` 또는 `lib/firestore-helpers.ts`를 수정한 후
+- `src/shared/api/firebase.ts` 또는 관련 Firebase 헬퍼를 수정한 후
 
 ## Related Files
 
 | File | Purpose |
 |------|---------|
-| `lib/firebase.ts` | 클라이언트 Firebase SDK (getFirebaseDb, getFirebaseAuth) |
-| `lib/firebase-admin.ts` | Admin SDK (adminDb, adminAuth) |
-| `lib/constants.ts` | EVENT_ID 상수 |
+| `src/shared/api/firebase.ts` | 클라이언트 Firebase SDK (getFirebaseDb, getFirebaseAuth) |
+| `src/shared/api/firebase-admin.ts` | Admin SDK (adminDb, adminAuth) |
+| `src/shared/config/constants.ts` | EVENT_ID 상수 |
 | `app/api/admin/route.ts` | Admin API (서버사이드 Firestore 접근) |
 | `app/api/vote/route.ts` | Vote API (서버사이드 Firestore 접근) |
 | `app/vote/page.tsx` | 투표 페이지 (클라이언트 Firestore 구독) |
@@ -35,7 +35,7 @@ description: Firestore 경로 일관성 검증. Firestore 접근 코드 수정 �
 **검사:** `import { db }` 또는 `import { auth }` 형태의 직접 값 import가 없어야 함.
 
 ```bash
-grep -rn "import.*{ db\b\|import.*{ auth\b" --include="*.tsx" --include="*.ts" app/ lib/ components/
+grep -rn "import.*{ db\b\|import.*{ auth\b" --include="*.tsx" --include="*.ts" app/ src/
 ```
 
 **PASS:** 결과 없음 (모두 `getFirebaseDb()`, `getFirebaseAuth()` 사용).
@@ -68,7 +68,7 @@ grep -n "adminDb\." app/api/*/route.ts
 **검사:** Firestore 경로에 하드코딩된 이벤트 ID가 없어야 함.
 
 ```bash
-grep -rn "gdg-busan-2026" --include="*.ts" --include="*.tsx" app/ lib/
+grep -rn "gdg-busan-2026" --include="*.ts" --include="*.tsx" app/ src/
 ```
 
 **PASS:** 결과 없음 (모두 `EVENT_ID` 상수 사용).
