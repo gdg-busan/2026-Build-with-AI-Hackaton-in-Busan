@@ -89,7 +89,9 @@ export default function ResultsPage() {
   // When status becomes "revealed_p1" or "revealed_final", fetch teams and compute scores
   useEffect(() => {
     if (eventConfig?.status !== "revealed_p1" && eventConfig?.status !== "revealed_final") return;
-    if (scores.length > 0 || p1Teams.length > 0) return;
+    // Only skip if we already have data for the current phase
+    if (eventConfig.status === "revealed_p1" && p1Teams.length > 0) return;
+    if (eventConfig.status === "revealed_final" && scores.length > 0) return;
 
     const fetchAndScore = async () => {
       const snap = await getDocs(collection(getFirebaseDb(), "events", EVENT_ID, "teams"));
@@ -115,6 +117,9 @@ export default function ResultsPage() {
         setRevealPhase("p1");
       } else {
         // revealed_final: score only selected teams, show top 3
+        // Reset p1 state and reveal so final animation plays
+        setP1Teams([]);
+        setRevealComplete(false);
         const selectedIds = eventConfig.phase1SelectedTeamIds ?? [];
         const computed = calculateFinalScores(
           allTeams,
