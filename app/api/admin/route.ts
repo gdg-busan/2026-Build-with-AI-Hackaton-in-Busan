@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { generateUniqueCode, EVENT_ID } from "@/lib/constants";
-import type { EventStatus, UserRole } from "@/lib/types";
-import { getPhase1Results, calculateFinalScores, detectFinalTies } from "@/lib/scoring";
+import { adminAuth, adminDb } from "@/shared/api/firebase-admin";
+import { generateUniqueCode, EVENT_ID } from "@/shared/config/constants";
+import type { EventStatus, UserRole } from "@/shared/types";
+import { getPhase1Results, calculateFinalScores, detectFinalTies } from "@/features/voting/lib/scoring";
 
 const VALID_STATUSES: EventStatus[] = [
   "waiting",
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
           const allTeams = teamsSnap.docs.map((d) => ({
             id: d.id,
             ...d.data(),
-          })) as import("@/lib/types").Team[];
+          })) as import("@/shared/types").Team[];
           const finalScores = calculateFinalScores(
             allTeams,
             eventData?.judgeWeight ?? 0.8,
@@ -162,7 +162,20 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        await eventRef().update({ status });
+        // Clear timer state when entering any timer-eligible phase or resetting to waiting.
+        // Prevents stale deadlines from a previous phase causing immediate expiry.
+        const updateData: Record<string, unknown> = { status };
+        if (
+          status === "waiting" ||
+          status === "voting_p1" ||
+          status === "voting_p2"
+        ) {
+          updateData.votingDeadline = null;
+          updateData.timerDurationSec = null;
+          updateData.autoCloseEnabled = false;
+        }
+
+        await eventRef().update(updateData);
         return NextResponse.json({ success: true });
       }
 
@@ -288,12 +301,12 @@ export async function POST(request: NextRequest) {
         const teams = teamsSnap.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
-        })) as import("@/lib/types").Team[];
+        })) as import("@/shared/types").Team[];
 
-        const { selectedTeamIds, tiedTeams } = getPhase1Results(teams, 10);
+        const { selectedTeamIds, tiedTeams, tiedGroups, hasTiedGroups } = getPhase1Results(teams, 10);
 
         if (tiedTeams && tiedTeams.length > 0) {
-          // There's a tie — return tie info without storing, admin must resolve manually
+          // Boundary tie — return for manual selection, do NOT store
           return NextResponse.json({
             success: true,
             selectedTeamIds,
@@ -303,16 +316,29 @@ export async function POST(request: NextRequest) {
               emoji: t.emoji,
               participantVoteCount: t.participantVoteCount,
             })),
+            tiedGroups,
+            hasTiedGroups,
           });
         }
 
-        // No tie — store directly
+        if (hasTiedGroups) {
+          // Internal tied groups — return for admin confirmation, do NOT store
+          return NextResponse.json({
+            success: true,
+            selectedTeamIds,
+            tiedTeams: null,
+            tiedGroups,
+            hasTiedGroups,
+          });
+        }
+
+        // No ties at all — store directly
         await eventRef().update({
           phase1SelectedTeamIds: selectedTeamIds,
           phase1FinalizedAt: FieldValue.serverTimestamp(),
         });
 
-        return NextResponse.json({ success: true, selectedTeamIds, tiedTeams: null });
+        return NextResponse.json({ success: true, selectedTeamIds, tiedTeams: null, tiedGroups: [], hasTiedGroups: false });
       }
 
       case "resolvePhase1Ties": {
@@ -325,10 +351,10 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Count total teams for validation
+        // Count visible teams for validation (exclude hidden, matching getPhase1Results)
         const totalTeamsSnap = await teamsCol().get();
-        const totalTeamCount = totalTeamsSnap.size;
-        const requiredCount = Math.min(10, totalTeamCount);
+        const visibleTeamCount = totalTeamsSnap.docs.filter((d) => !d.data().isHidden).length;
+        const requiredCount = Math.min(10, visibleTeamCount);
 
         if (selectedTeamIds.length !== requiredCount) {
           return NextResponse.json(
@@ -416,6 +442,17 @@ export async function POST(request: NextRequest) {
           );
           await batch.commit();
         }
+
+        // Clear phase selection data and reset status (votes invalidate all derived data)
+        await eventRef().update({
+          status: "waiting",
+          phase1SelectedTeamIds: FieldValue.delete(),
+          phase1FinalizedAt: FieldValue.delete(),
+          finalRankingOverrides: FieldValue.delete(),
+          votingDeadline: null,
+          timerDurationSec: null,
+          autoCloseEnabled: false,
+        });
 
         return NextResponse.json({ success: true });
       }
@@ -561,6 +598,7 @@ export async function POST(request: NextRequest) {
           phase1SelectedTeamIds: FieldValue.delete(),
           phase1FinalizedAt: FieldValue.delete(),
           finalRankingOverrides: FieldValue.delete(),
+          votingDeadline: null,
           timerDurationSec: null,
           autoCloseEnabled: false,
         });
@@ -582,7 +620,7 @@ export async function POST(request: NextRequest) {
           codePrefix?: string;
         };
 
-        const { TEAM_EMOJIS } = await import("@/lib/constants");
+        const { TEAM_EMOJIS } = await import("@/shared/config/constants");
 
         const batch = adminDb.batch();
 
@@ -817,7 +855,7 @@ export async function POST(request: NextRequest) {
           allMissionsCompletedAt: string | null;
         }> = [];
 
-        const { MISSIONS: DEFINED_MISSIONS } = await import("@/lib/missions");
+        const { MISSIONS: DEFINED_MISSIONS } = await import("@/features/mission/model/missions");
         const definedIds = new Set<string>(DEFINED_MISSIONS.map((m) => m.id));
 
         for (const userDoc of allUsersSnap.docs) {

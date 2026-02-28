@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { EVENT_ID } from "@/lib/constants";
-import type { UserRole } from "@/lib/types";
-import { trackMission } from "@/lib/mission-tracker";
+import { adminAuth, adminDb } from "@/shared/api/firebase-admin";
+import { EVENT_ID } from "@/shared/config/constants";
+import type { UserRole } from "@/shared/types";
+import { trackMission } from "@/features/mission/api/mission-tracker";
 
 
 export async function POST(req: NextRequest) {

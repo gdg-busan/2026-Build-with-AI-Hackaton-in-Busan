@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
-import { gaLogin, gaLoginFailed } from "@/lib/gtag";
-import { TypeWriter } from "@/components/TypeWriter";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useAuth } from "@/features/auth/model/auth-context";
+import { gaLogin, gaLoginFailed } from "@/shared/lib/gtag";
+import { TypeWriter } from "@/shared/ui/TypeWriter";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 
 export default function LoginPage() {
   const { user, loading, login } = useAuth();

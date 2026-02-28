@@ -4,16 +4,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, doc, onSnapshot, getDocs } from "firebase/firestore";
 import { motion } from "framer-motion";
-import { getFirebaseDb } from "@/lib/firebase";
-import { useAuth } from "@/lib/auth-context";
-import { calculateFinalScores, applyFinalRankingOverrides } from "@/lib/scoring";
-import { EVENT_ID } from "@/lib/constants";
-import { ResultReveal } from "@/components/ResultReveal";
-import type { EventConfig, Team, TeamScore } from "@/lib/types";
-import { ChatPanel } from "@/components/chat/ChatPanel";
-import { AnnouncementManager } from "@/components/AnnouncementManager";
-import { MissionPanel } from "@/components/MissionPanel";
-import { gaResultsView, gaRevealComplete } from "@/lib/gtag";
+import { getFirebaseDb } from "@/shared/api/firebase";
+import { useAuth } from "@/features/auth/model/auth-context";
+import { calculateFinalScores, applyFinalRankingOverrides } from "@/features/voting/lib/scoring";
+import { EVENT_ID } from "@/shared/config/constants";
+import { ResultReveal } from "@/features/results/ui/ResultReveal";
+import type { EventConfig, Team, TeamScore } from "@/shared/types";
+import { ChatPanel } from "@/features/chat/ui/ChatPanel";
+import { AnnouncementManager } from "@/features/announcement/ui/AnnouncementManager";
+import { MissionPanel } from "@/features/mission/ui/MissionPanel";
+import { gaResultsView, gaRevealComplete } from "@/shared/lib/gtag";
 
 function getRankLabel(rank: number) {
   if (rank === 1) return "🥇";
@@ -89,7 +89,9 @@ export default function ResultsPage() {
   // When status becomes "revealed_p1" or "revealed_final", fetch teams and compute scores
   useEffect(() => {
     if (eventConfig?.status !== "revealed_p1" && eventConfig?.status !== "revealed_final") return;
-    if (scores.length > 0 || p1Teams.length > 0) return;
+    // Only skip if we already have data for the current phase
+    if (eventConfig.status === "revealed_p1" && p1Teams.length > 0) return;
+    if (eventConfig.status === "revealed_final" && scores.length > 0) return;
 
     const fetchAndScore = async () => {
       const snap = await getDocs(collection(getFirebaseDb(), "events", EVENT_ID, "teams"));
@@ -115,6 +117,9 @@ export default function ResultsPage() {
         setRevealPhase("p1");
       } else {
         // revealed_final: score only selected teams, show top 3
+        // Reset p1 state and reveal so final animation plays
+        setP1Teams([]);
+        setRevealComplete(false);
         const selectedIds = eventConfig.phase1SelectedTeamIds ?? [];
         const computed = calculateFinalScores(
           allTeams,
