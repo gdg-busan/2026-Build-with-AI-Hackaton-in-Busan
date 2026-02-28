@@ -68,7 +68,7 @@ function nextReq(
 }
 
 async function getVoteHandler() {
-  const mod = await import("@/app/api/vote/route");
+  const mod = await import("@app/api/vote/route");
   return mod.POST;
 }
 

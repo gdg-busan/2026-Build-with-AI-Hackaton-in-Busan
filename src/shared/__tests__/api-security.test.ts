@@ -128,17 +128,17 @@ describe("Vote API Security", () => {
 
   // Dynamically import route handlers after mocks are set up
   async function getVoteHandler() {
-    const mod = await import("@/app/api/vote/route");
+    const mod = await import("@app/api/vote/route");
     return mod.POST;
   }
 
   async function getAuthHandler() {
-    const mod = await import("@/app/api/auth/route");
+    const mod = await import("@app/api/auth/route");
     return mod.POST;
   }
 
   async function getAdminHandler() {
-    const mod = await import("@/app/api/admin/route");
+    const mod = await import("@app/api/admin/route");
     return mod.POST;
   }
 

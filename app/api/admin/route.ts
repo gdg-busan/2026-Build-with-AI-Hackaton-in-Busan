@@ -351,10 +351,10 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Count total teams for validation
+        // Count visible teams for validation (exclude hidden, matching getPhase1Results)
         const totalTeamsSnap = await teamsCol().get();
-        const totalTeamCount = totalTeamsSnap.size;
-        const requiredCount = Math.min(10, totalTeamCount);
+        const visibleTeamCount = totalTeamsSnap.docs.filter((d) => !d.data().isHidden).length;
+        const requiredCount = Math.min(10, visibleTeamCount);
 
         if (selectedTeamIds.length !== requiredCount) {
           return NextResponse.json(
