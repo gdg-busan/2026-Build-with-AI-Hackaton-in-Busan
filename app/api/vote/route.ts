@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { EVENT_ID } from "@/lib/constants";
-import type { UserRole, VotingPhase } from "@/lib/types";
+import { adminAuth, adminDb } from "@/shared/api/firebase-admin";
+import { EVENT_ID } from "@/shared/config/constants";
+import type { UserRole, VotingPhase } from "@/shared/types";
 
 export async function POST(req: NextRequest) {
   try {

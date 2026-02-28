@@ -1,25 +1,25 @@
 "use client";
 
-import { AnnouncementManager } from "@/components/AnnouncementManager";
-import { CountdownTimer } from "@/components/CountdownTimer";
-import { MemberProfileDialog } from "@/components/MemberProfileDialog";
-import { MissionPanel } from "@/components/MissionPanel";
-import { TeamCard } from "@/components/TeamCard";
-import { TeamDetailSheet } from "@/components/TeamDetailSheet";
-import { TeamEditDialog } from "@/components/TeamEditDialog";
-import { VoteConfirmDialog } from "@/components/VoteConfirmDialog";
-import { VotingProgress } from "@/components/VotingProgress";
-import { ChatPanel } from "@/components/chat/ChatPanel";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useMissions } from "@/hooks/useMissions";
-import { useVotingTimer } from "@/hooks/useVotingTimer";
-import { useAuth } from "@/lib/auth-context";
-import { EVENT_ID } from "@/lib/constants";
-import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
-import type { EventConfig, MemberProfile, Team } from "@/lib/types";
-import { gaTeamSelect, gaTeamInspect, gaVoteConfirmOpen, gaVoteSubmit, gaVoteFailed, gaLogout } from "@/lib/gtag";
-import { cn } from "@/lib/utils";
+import { AnnouncementManager } from "@/features/announcement/ui/AnnouncementManager";
+import { CountdownTimer } from "@/widgets/countdown/ui/CountdownTimer";
+import { MemberProfileDialog } from "@/widgets/team-detail/ui/MemberProfileDialog";
+import { MissionPanel } from "@/features/mission/ui/MissionPanel";
+import { TeamCard } from "@/widgets/team-card/ui/TeamCard";
+import { TeamDetailSheet } from "@/widgets/team-detail/ui/TeamDetailSheet";
+import { TeamEditDialog } from "@/widgets/team-detail/ui/TeamEditDialog";
+import { VoteConfirmDialog } from "@/features/voting/ui/VoteConfirmDialog";
+import { VotingProgress } from "@/features/voting/ui/VotingProgress";
+import { ChatPanel } from "@/features/chat/ui/ChatPanel";
+import { Badge } from "@/shared/ui/badge";
+import { Button } from "@/shared/ui/button";
+import { useMissions } from "@/features/mission/model/useMissions";
+import { useVotingTimer } from "@/features/voting/model/useVotingTimer";
+import { useAuth } from "@/features/auth/model/auth-context";
+import { EVENT_ID } from "@/shared/config/constants";
+import { getFirebaseAuth, getFirebaseDb } from "@/shared/api/firebase";
+import type { EventConfig, MemberProfile, Team } from "@/shared/types";
+import { gaTeamSelect, gaTeamInspect, gaVoteConfirmOpen, gaVoteSubmit, gaVoteFailed, gaLogout } from "@/shared/lib/gtag";
+import { cn } from "@/shared/lib/utils";
 import {
   collection,
   doc,

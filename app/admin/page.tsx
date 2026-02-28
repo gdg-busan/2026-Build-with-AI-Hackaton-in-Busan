@@ -11,18 +11,18 @@ import {
   limit,
 
 } from "firebase/firestore";
-import { getFirebaseDb, getFirebaseAuth } from "@/lib/firebase";
-import { useAuth } from "@/lib/auth-context";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { calculateScores, getTop10, calculateFinalScores, detectFinalTies, getPhase1Results } from "@/lib/scoring";
-import type { TiedGroup } from "@/lib/scoring";
-import { TEAM_EMOJIS, EVENT_ID } from "@/lib/constants";
-import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatRoom, Announcement } from "@/lib/types";
-import { MISSIONS } from "@/lib/missions";
+import { getFirebaseDb, getFirebaseAuth } from "@/shared/api/firebase";
+import { useAuth } from "@/features/auth/model/auth-context";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { calculateScores, getTop10, calculateFinalScores, detectFinalTies, getPhase1Results, applyFinalRankingOverrides } from "@/features/voting/lib/scoring";
+import type { TiedGroup } from "@/features/voting/lib/scoring";
+import { TEAM_EMOJIS, EVENT_ID } from "@/shared/config/constants";
+import type { Team, User, EventConfig, EventStatus, UserRole, ChatMessage, ChatRoom, Announcement } from "@/shared/types";
+import { MISSIONS } from "@/features/mission/model/missions";
 import { toast } from "sonner";
-import BatchSetupWizard from "@/components/BatchSetupWizard";
-import { useVotingTimer } from "@/hooks/useVotingTimer";
+import BatchSetupWizard from "@/widgets/admin/ui/BatchSetupWizard";
+import { useVotingTimer } from "@/features/voting/model/useVotingTimer";
 
 type TabType = "setup" | "event" | "teams" | "users" | "monitor" | "chat" | "missions" | "announce";
 
@@ -324,12 +324,8 @@ export default function AdminPage() {
       const currentStatus = eventConfig.status;
       autoClosedDeadlineRef.current = currentDeadline;
       callAdminApi("updateEventStatus", { status: next.status })
-        .then(async () => {
+        .then(() => {
           toast.success(next.message);
-          // waiting → voting 전환 시 타이머 리셋
-          if (currentStatus === "waiting") {
-            await callAdminApi("resetTimer", {});
-          }
         })
         .catch((e: Error) => {
           toast.error(`자동 전환 실패: ${e.message}`);
@@ -456,6 +452,9 @@ export default function AdminPage() {
     setSubmitting(true);
     try {
       await callAdminApi("resetVotes", {});
+      setPhase1Result(null);
+      setPhase1Confirmed(false);
+      setPhase1ManualSelection([]);
       toast.success("모든 투표가 초기화되었습니다.");
     } catch (e) {
       toast.error((e as Error).message);
@@ -470,6 +469,9 @@ export default function AdminPage() {
     setSubmitting(true);
     try {
       await callAdminApi("resetAll", {});
+      setPhase1Result(null);
+      setPhase1Confirmed(false);
+      setPhase1ManualSelection([]);
       toast.success("전체 초기화 완료! 팀, 참가자, 투표, 채팅, 공지사항이 모두 삭제되었습니다.");
     } catch (e) {
       toast.error((e as Error).message);
@@ -912,7 +914,7 @@ export default function AdminPage() {
                               <input
                                 type="checkbox"
                                 checked={isAutoSelected || isManualSelected}
-                                disabled={isAutoSelected}
+                                disabled={isAutoSelected || (!isManualSelected && phase1ManualSelection.length >= Math.min(10, teams.length))}
                                 onChange={(e) => {
                                   if (isAutoSelected) return;
                                   setPhase1ManualSelection((prev) =>
@@ -1002,13 +1004,23 @@ export default function AdminPage() {
 
                     <div className="flex items-center gap-3">
                       <Button
-                        onClick={() => {
-                          setPhase1Confirmed(true);
-                          toast.success("TOP 10 선정이 확정되었습니다.");
+                        onClick={async () => {
+                          setFinalizingPhase1(true);
+                          try {
+                            await callAdminApi("resolvePhase1Ties", { selectedTeamIds: phase1Result!.selectedTeamIds });
+                            setPhase1Confirmed(true);
+                            setPhase1Result((prev) => prev ? { ...prev, tiedTeams: null } : null);
+                            toast.success("TOP 10 선정이 확정되었습니다.");
+                          } catch (e) {
+                            toast.error((e as Error).message);
+                          } finally {
+                            setFinalizingPhase1(false);
+                          }
                         }}
+                        disabled={finalizingPhase1}
                         className="font-mono bg-[#00FF88] text-[#0A0E1A] hover:bg-[#00FF88]/90"
                       >
-                        확정
+                        {finalizingPhase1 ? "저장 중..." : "확정"}
                       </Button>
                       <Button
                         onClick={handleFinalizePhase1}
@@ -1056,8 +1068,12 @@ export default function AdminPage() {
 
               // Only resolve up to top 3 positions
               const tiedTeamCount = tiedTeams ? Math.min(tiedTeams.length, 3) : 0;
+              const tiedRankPositions = tiedTeams ? tiedTeams.map(t => t.rank).sort((a, b) => a - b) : [];
               const medals = ["🥇", "🥈", "🥉"];
-              const rankLabel = (i: number) => `${medals[i] || "🏅"} ${i + 1}위`;
+              const rankLabel = (i: number) => {
+                const pos = tiedRankPositions[i] ?? (i + 1);
+                return `${medals[pos - 1] || "🏅"} ${pos}위`;
+              };
 
               return (
                 <div className="bg-[#1A2235] rounded-xl p-6 border border-[#FF6B35]/20">
@@ -1069,14 +1085,14 @@ export default function AdminPage() {
                         <span className="text-[#00FF88] font-mono text-sm">순위 확정 완료</span>
                       </div>
                       <div className="space-y-2">
-                        {eventConfig.finalRankingOverrides!.map((teamId, i) => {
-                          const team = teams.find((t) => t.id === teamId);
-                          const score = finalScores.find((s) => s.teamId === teamId);
+                        {applyFinalRankingOverrides(finalScores, eventConfig.finalRankingOverrides!).slice(0, 3).map((score, i) => {
+                          const team = teams.find((t) => t.id === score.teamId);
+                          const isOverridden = eventConfig.finalRankingOverrides!.includes(score.teamId);
                           return team ? (
-                            <div key={teamId} className="flex items-center gap-3 p-2 rounded-lg bg-[#0A0E1A]/50">
+                            <div key={score.teamId} className={`flex items-center gap-3 p-2 rounded-lg ${isOverridden ? "bg-yellow-500/5 border border-yellow-500/10" : "bg-[#0A0E1A]/50"}`}>
                               <span className="text-lg">{medals[i] || "🏅"}</span>
                               <span className="font-mono text-sm text-white">{team.emoji} {team.name}</span>
-                              <span className="text-gray-500 font-mono text-xs ml-auto">{score?.finalScore.toFixed(2)}점</span>
+                              <span className="text-gray-500 font-mono text-xs ml-auto">{score.finalScore.toFixed(2)}점</span>
                             </div>
                           ) : null;
                         })}
@@ -1149,7 +1165,7 @@ export default function AdminPage() {
 
                       {/* Ranking selectors for top 3 positions only */}
                       <div className="space-y-2">
-                        <p className="text-gray-400 font-mono text-xs">TOP 3 순위 지정 (순서대로 선택):</p>
+                        <p className="text-gray-400 font-mono text-xs">동점 팀 순위 지정:</p>
                         {Array.from({ length: tiedTeamCount }, (_, rank) => rank).map((rank) => (
                           <div key={rank} className="flex items-center gap-3">
                             <span className="font-mono text-sm w-14 text-right">{rankLabel(rank)}</span>
