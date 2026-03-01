@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Info, Star, MessageSquare } from "lucide-react";
+import { Check, Info, Star, MessageSquare, Github, ExternalLink } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { Team } from "@/shared/types";
 import { CheerButton } from "@/features/cheer/ui/CheerButton";
@@ -104,7 +104,7 @@ export function TeamCard({
         {team.description}
       </p>
 
-      {/* Detail hint + feedback count */}
+      {/* Detail hint + feedback count + URL links */}
       <div className="mt-3 flex items-center gap-3">
         <button
           onClick={(e) => {
@@ -121,6 +121,38 @@ export function TeamCard({
             <MessageSquare className="w-2.5 h-2.5" />
             {feedbackCount}
           </span>
+        )}
+
+        {/* URL quick links - pushed to the right */}
+        {(team.demoUrl || team.githubUrl) && (
+          <div className="ml-auto flex items-center gap-1.5">
+            {team.demoUrl && (
+              <a
+                href={team.demoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#FF6B35]/20 bg-[#FF6B35]/5 text-[#FF6B35]/70 hover:text-[#FF6B35] hover:border-[#FF6B35]/40 hover:bg-[#FF6B35]/10 hover:shadow-[0_0_6px_rgba(255,107,53,0.15)] transition-all font-mono text-[10px]"
+                aria-label="Demo 보기"
+              >
+                <ExternalLink className="w-2.5 h-2.5" />
+                Demo
+              </a>
+            )}
+            {team.githubUrl && (
+              <a
+                href={team.githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-foreground/10 bg-foreground/5 text-muted-foreground hover:text-foreground hover:border-foreground/20 hover:bg-foreground/10 hover:shadow-[0_0_6px_rgba(255,255,255,0.08)] transition-all font-mono text-[10px]"
+                aria-label="GitHub 보기"
+              >
+                <Github className="w-2.5 h-2.5" />
+                GitHub
+              </a>
+            )}
+          </div>
         )}
       </div>
 
