@@ -203,6 +203,13 @@
   box-shadow: -4px 0 40px rgba(0, 255, 136, 0.12), -1px 0 0 rgba(0, 255, 136, 0.3);
 }
 
+/* Safe area for notch devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -219,4 +226,43 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 255, 136, 0.5);
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .glow-green,
+  .glow-orange,
+  .glow-blue {
+    text-shadow: none;
+  }
+
+  .card-glow,
+  .card-glow-selected,
+  .drawer-glow,
+  .progress-glow {
+    box-shadow: none;
+  }
+
+  .typing-cursor::after {
+    animation: none;
+    opacity: 1;
+  }
+
+  .glitch {
+    animation: none;
+    transform: none;
+  }
+
+  .scanline {
+    display: none;
+  }
 }

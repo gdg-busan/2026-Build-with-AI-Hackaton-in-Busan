@@ -34,9 +34,16 @@ export function VoteConfirmDialog({
             $ confirm_vote
           </DialogTitle>
           <DialogDescription>
-            다음 팀들에게 투표합니다. 투표 후 변경할 수 없습니다.
+            다음 팀들에게 투표합니다.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#FF6B35]/10 border border-[#FF6B35]/30">
+          <span className="text-[#FF6B35] text-sm shrink-0">⚠️</span>
+          <span className="font-mono text-xs text-[#FF6B35]">
+            투표 후에는 변경할 수 없습니다. 신중하게 선택해주세요!
+          </span>
+        </div>
 
         <div className="space-y-2 my-4">
           {selectedTeams.map((team) => (

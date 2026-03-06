@@ -164,7 +164,7 @@ export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
             maxLength={200}
             rows={2}
             placeholder="팀에게 메시지를 남겨보세요..."
-            className="w-full rounded-md border border-border/50 bg-background/50 px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 resize-none transition-colors"
+            className="w-full rounded-md border border-border/50 bg-background/50 px-3 py-2 text-base sm:text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 resize-none transition-colors"
           />
           <span className="absolute bottom-2 right-2 text-xs text-muted-foreground/50 font-mono">
             {text.length}/200

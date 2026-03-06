@@ -30,11 +30,12 @@ import {
   where,
 } from "firebase/firestore";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, LogOut, Pencil, Trophy, UserPen } from "lucide-react";
+import { CheckCircle2, LogOut, Pencil, Trophy, UserPen, Search, Bookmark, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useBookmarks } from "@/features/voting/model/useBookmarks";
 
 export default function VotePage() {
   const router = useRouter();
@@ -59,6 +60,10 @@ export default function VotePage() {
   const [inspectMembers, setInspectMembers] = useState<MemberProfile[]>([]);
   const prevStatusRef = useRef<string | null>(null);
   const voteTimer = useVotingTimer(eventConfig);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTechFilter, setSelectedTechFilter] = useState<string | null>(null);
+  const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
+  const { isBookmarked, toggleBookmark, count: bookmarkCount } = useBookmarks();
 
   // Show toast when timer is extended
   useEffect(() => {
@@ -387,6 +392,36 @@ export default function VotePage() {
       : teams
   ).filter((t) => !t.isHidden);
 
+  // Collect all unique tech stacks for filter chips
+  const allTechStacks = useMemo(() => {
+    const tags = new Set<string>();
+    displayTeams.forEach((t) => t.techStack?.forEach((tag) => tags.add(tag)));
+    return Array.from(tags).sort();
+  }, [displayTeams]);
+
+  // Apply search, tech filter, and bookmark filter
+  const filteredTeams = useMemo(() => {
+    let result = displayTeams;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          (t.nickname?.toLowerCase().includes(q)) ||
+          t.description.toLowerCase().includes(q)
+      );
+    }
+    if (selectedTechFilter) {
+      result = result.filter((t) =>
+        t.techStack?.includes(selectedTechFilter)
+      );
+    }
+    if (showBookmarksOnly) {
+      result = result.filter((t) => isBookmarked(t.id));
+    }
+    return result;
+  }, [displayTeams, searchQuery, selectedTechFilter, showBookmarksOnly, isBookmarked]);
+
   // Show teams grid in all states
   const showTeams =
     status === "waiting" ||
@@ -663,8 +698,95 @@ export default function VotePage() {
                 {"// 팀 목록 (읽기 전용)"}
               </p>
             )}
+
+            {/* Search & Filter Bar */}
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="팀명 또는 설명 검색..."
+                    aria-label="팀 검색"
+                    className="w-full pl-9 pr-8 py-2 rounded-lg border border-border bg-card font-mono text-base sm:text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:border-primary/50 transition-colors"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowBookmarksOnly(!showBookmarksOnly)}
+                  aria-pressed={showBookmarksOnly}
+                  aria-label="북마크 필터"
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-2 rounded-lg border font-mono text-xs transition-colors whitespace-nowrap focus-visible:ring-2 focus-visible:ring-primary/50",
+                    showBookmarksOnly
+                      ? "border-[#FF6B35]/50 bg-[#FF6B35]/10 text-[#FF6B35]"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-border"
+                  )}
+                >
+                  <Bookmark className={cn("w-3.5 h-3.5", showBookmarksOnly && "fill-current")} />
+                  <span className="hidden sm:inline">찜</span>
+                  {bookmarkCount > 0 && (
+                    <span className="text-[10px]">({bookmarkCount})</span>
+                  )}
+                </button>
+              </div>
+
+              {/* Tech stack filter chips */}
+              {allTechStacks.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {allTechStacks.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() =>
+                        setSelectedTechFilter(
+                          selectedTechFilter === tag ? null : tag
+                        )
+                      }
+                      aria-pressed={selectedTechFilter === tag}
+                      className={cn(
+                        "px-2 py-0.5 rounded border font-mono text-[11px] transition-colors focus-visible:ring-2 focus-visible:ring-primary/50",
+                        selectedTechFilter === tag
+                          ? "border-primary/50 bg-primary/10 text-primary"
+                          : "border-border/50 bg-card text-muted-foreground hover:border-primary/30 hover:text-primary/80"
+                      )}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Active filter summary */}
+              {(searchQuery || selectedTechFilter || showBookmarksOnly) && (
+                <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
+                  <span>{filteredTeams.length}개 팀</span>
+                  {filteredTeams.length === 0 && (
+                    <button
+                      onClick={() => {
+                        setSearchQuery("");
+                        setSelectedTechFilter(null);
+                        setShowBookmarksOnly(false);
+                      }}
+                      className="text-primary hover:text-primary/80 underline"
+                    >
+                      필터 초기화
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...displayTeams]
+              {[...filteredTeams]
                 .sort((a, b) => {
                   const aIsOwn = a.id === user.teamId ? -1 : 0;
                   const bIsOwn = b.id === user.teamId ? -1 : 0;
@@ -684,6 +806,8 @@ export default function VotePage() {
                       (!selectedTeams.includes(team.id) &&
                         selectedTeams.length >= maxVotes)
                     }
+                    isBookmarked={isBookmarked(team.id)}
+                    onToggleBookmark={toggleBookmark}
                   />
                 ))}
             </div>

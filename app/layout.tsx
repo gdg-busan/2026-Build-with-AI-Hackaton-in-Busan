@@ -25,6 +25,12 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.ico",
   },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "GDG Vote",
+  },
   openGraph: {
     title: "GDG Busan - Build with AI 2026",
     description: "25팀의 AI 프로젝트 중 최고를 투표하세요! 🗳️",
@@ -43,8 +49,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: "#0A0E1A",
 };
 
@@ -62,7 +66,7 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${dmSans.variable} ${jetbrainsMono.variable} antialiased min-h-screen dot-grid`}
       >
-        <div className="scanline fixed inset-0 z-50" />
+        <div className="scanline fixed inset-0 z-50 pointer-events-none" />
         <Providers>
           {children}
           <footer className="flex justify-center py-4 mt-auto">

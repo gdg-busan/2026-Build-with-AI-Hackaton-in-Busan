@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Info, Star, MessageSquare, Github, ExternalLink } from "lucide-react";
+import { Check, Info, Star, MessageSquare, Github, ExternalLink, Bookmark } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { Team } from "@/shared/types";
 import { CheerButton } from "@/features/cheer/ui/CheerButton";
@@ -15,6 +15,8 @@ interface TeamCardProps {
   onInspect?: (team: Team) => void;
   disabled?: boolean;
   feedbackCount?: number;
+  isBookmarked?: boolean;
+  onToggleBookmark?: (teamId: string) => void;
 }
 
 export function TeamCard({
@@ -25,6 +27,8 @@ export function TeamCard({
   onInspect,
   disabled = false,
   feedbackCount = 0,
+  isBookmarked = false,
+  onToggleBookmark,
 }: TeamCardProps) {
   const isDisabled = disabled || isOwnTeam;
 
@@ -78,6 +82,25 @@ export function TeamCard({
           aria-label="팀 상세 보기"
         >
           <Info className="w-4 h-4" />
+        </button>
+      )}
+
+      {/* Bookmark button */}
+      {onToggleBookmark && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleBookmark(team.id);
+          }}
+          className={cn(
+            "absolute top-2.5 right-2.5 w-7 h-7 flex items-center justify-center rounded-md transition-colors z-10",
+            isBookmarked
+              ? "text-[#FF6B35] hover:text-[#FF6B35]/80"
+              : "text-muted-foreground/40 hover:text-[#FF6B35]/60 hover:bg-[#FF6B35]/10"
+          )}
+          aria-label={isBookmarked ? "북마크 해제" : "북마크"}
+        >
+          <Bookmark className={cn("w-4 h-4", isBookmarked && "fill-current")} />
         </button>
       )}
 
