@@ -709,7 +709,8 @@ export default function VotePage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="팀명 또는 설명 검색..."
-                    className="w-full pl-9 pr-8 py-2 rounded-lg border border-border bg-card font-mono text-base sm:text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 transition-colors"
+                    aria-label="팀 검색"
+                    className="w-full pl-9 pr-8 py-2 rounded-lg border border-border bg-card font-mono text-base sm:text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:border-primary/50 transition-colors"
                   />
                   {searchQuery && (
                     <button
@@ -722,8 +723,10 @@ export default function VotePage() {
                 </div>
                 <button
                   onClick={() => setShowBookmarksOnly(!showBookmarksOnly)}
+                  aria-pressed={showBookmarksOnly}
+                  aria-label="북마크 필터"
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-2 rounded-lg border font-mono text-xs transition-colors whitespace-nowrap",
+                    "flex items-center gap-1.5 px-3 py-2 rounded-lg border font-mono text-xs transition-colors whitespace-nowrap focus-visible:ring-2 focus-visible:ring-primary/50",
                     showBookmarksOnly
                       ? "border-[#FF6B35]/50 bg-[#FF6B35]/10 text-[#FF6B35]"
                       : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-border"
@@ -748,8 +751,9 @@ export default function VotePage() {
                           selectedTechFilter === tag ? null : tag
                         )
                       }
+                      aria-pressed={selectedTechFilter === tag}
                       className={cn(
-                        "px-2 py-0.5 rounded border font-mono text-[11px] transition-colors",
+                        "px-2 py-0.5 rounded border font-mono text-[11px] transition-colors focus-visible:ring-2 focus-visible:ring-primary/50",
                         selectedTechFilter === tag
                           ? "border-primary/50 bg-primary/10 text-primary"
                           : "border-border/50 bg-card text-muted-foreground hover:border-primary/30 hover:text-primary/80"

@@ -205,7 +205,7 @@
 
 /* Safe area for notch devices */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .fixed.bottom-6 {
+  .safe-bottom {
     bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
   }
 }

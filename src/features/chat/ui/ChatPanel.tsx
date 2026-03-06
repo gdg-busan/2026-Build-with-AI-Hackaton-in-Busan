@@ -113,7 +113,7 @@ export function ChatPanel() {
       {/* Floating chat button */}
       <button
         onClick={() => handleOpen(true)}
-        className="fixed bottom-6 right-6 z-30 w-12 h-12 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center hover:bg-primary/30 transition-all hover:scale-105 shadow-lg shadow-primary/10 group"
+        className="fixed bottom-6 right-6 safe-bottom z-30 w-12 h-12 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center hover:bg-primary/30 transition-all hover:scale-105 shadow-lg shadow-primary/10 group"
       >
         <MessageCircle className="w-5 h-5 text-primary group-hover:text-primary" />
         {hasAnyUnread && (

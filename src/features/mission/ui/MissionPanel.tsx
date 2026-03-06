@@ -46,7 +46,7 @@ export function MissionPanel() {
       {/* Floating trophy button - bottom LEFT */}
       <button
         onClick={() => { gaMissionPanelOpen(); setOpen(true); }}
-        className="fixed bottom-6 left-6 z-40 w-14 h-14 rounded-full bg-card border border-primary/40 shadow-lg flex items-center justify-center hover:border-primary transition-colors hover:shadow-[0_0_16px_rgba(0,255,136,0.3)] group"
+        className="fixed bottom-6 left-6 safe-bottom z-40 w-14 h-14 rounded-full bg-card border border-primary/40 shadow-lg flex items-center justify-center hover:border-primary transition-colors hover:shadow-[0_0_16px_rgba(0,255,136,0.3)] group"
         aria-label="미션 보기"
       >
         <span className="text-xl">🏆</span>

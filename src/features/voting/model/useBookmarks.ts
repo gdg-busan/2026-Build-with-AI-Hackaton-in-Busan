@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 
 const STORAGE_KEY = "gdg-hackathon-bookmarks";
 
@@ -8,18 +8,17 @@ function loadBookmarks(): string[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is string => typeof item === "string");
   } catch {
     return [];
   }
 }
 
 export function useBookmarks() {
-  const [bookmarks, setBookmarks] = useState<string[]>([]);
-
-  useEffect(() => {
-    setBookmarks(loadBookmarks());
-  }, []);
+  const [bookmarks, setBookmarks] = useState<string[]>(loadBookmarks);
 
   const toggleBookmark = useCallback((teamId: string) => {
     setBookmarks((prev) => {
