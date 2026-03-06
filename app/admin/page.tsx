@@ -1053,7 +1053,7 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Final Tie Resolution - shown when closed_p2 and ties detected */}
+            {/* Final Ranking - shown when closed_p2 or revealed_final */}
             {eventConfig && (eventConfig.status === "closed_p2" || eventConfig.status === "revealed_final") && eventConfig.phase1SelectedTeamIds && (() => {
               const finalScores = calculateFinalScores(
                 teams,
@@ -1063,8 +1063,6 @@ export default function AdminPage() {
               );
               const { tiedTeams, tieGroups } = detectFinalTies(finalScores, 3);
               const hasOverrides = eventConfig.finalRankingOverrides && eventConfig.finalRankingOverrides.length > 0;
-
-              if (!tiedTeams && !hasOverrides) return null;
 
               // Only resolve up to top 3 positions
               const tiedTeamCount = tiedTeams ? Math.min(tiedTeams.length, 3) : 0;
@@ -1205,7 +1203,40 @@ export default function AdminPage() {
                         {resolvingFinalTies ? "처리 중..." : "최종 순위 확정"}
                       </Button>
                     </div>
-                  ) : null}
+                  ) : (
+                    /* No ties — show top 3 ranking directly */
+                    <div className="space-y-3">
+                      <div className="p-3 rounded-lg bg-[#00FF88]/10 border border-[#00FF88]/30">
+                        <p className="text-[#00FF88] font-mono text-sm font-semibold">동점 없음 — 순위가 자동 확정되었습니다</p>
+                      </div>
+                      <div className="space-y-2">
+                        {finalScores.slice(0, 3).map((score, i) => (
+                          <div key={score.teamId} className="flex items-center gap-3 p-3 rounded-lg bg-[#0A0E1A]/50">
+                            <span className="text-lg">{medals[i] || "🏅"}</span>
+                            <span className="text-lg">{score.emoji}</span>
+                            <span className="font-mono text-sm text-white flex-1">{score.teamName}</span>
+                            <span className="text-gray-400 font-mono text-xs">{score.finalScore.toFixed(2)}점</span>
+                          </div>
+                        ))}
+                      </div>
+                      {finalScores.length > 3 && (
+                        <div className="space-y-1 mt-2">
+                          <p className="text-gray-500 font-mono text-xs">나머지 순위:</p>
+                          {finalScores.slice(3).map((score) => (
+                            <div key={score.teamId} className="flex items-center gap-3 p-2 rounded-lg bg-[#0A0E1A]/30">
+                              <span className="font-mono text-xs text-gray-500 w-6 text-right">{score.rank}</span>
+                              <span className="text-sm">{score.emoji}</span>
+                              <span className="font-mono text-xs text-gray-400 flex-1">{score.teamName}</span>
+                              <span className="text-gray-500 font-mono text-xs">{score.finalScore.toFixed(2)}점</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-gray-500 font-mono text-xs mt-2">
+                        이 순위로 &quot;최종 발표&quot; 상태로 전환하면 결과가 공개됩니다.
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })()}
