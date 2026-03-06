@@ -63,7 +63,11 @@ export function ChatComposer({ onSend, disabled, placeholder = "메시지를 입
           placeholder={placeholder}
           rows={1}
           maxLength={500}
-          className="flex-1 bg-transparent border-none outline-none resize-none font-mono text-[13px] text-foreground placeholder:text-muted-foreground/40 py-2 min-h-[36px] max-h-[100px] leading-tight"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          className="flex-1 bg-transparent border-none outline-none resize-none font-mono text-base sm:text-[13px] text-foreground placeholder:text-muted-foreground/40 py-2 min-h-[36px] max-h-[100px] leading-tight"
         />
         <button
           onClick={handleSend}

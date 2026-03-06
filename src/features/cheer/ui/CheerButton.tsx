@@ -67,7 +67,7 @@ export function CheerButton({ teamId }: CheerButtonProps) {
             key={emoji}
             onClick={() => handleCheer(emoji)}
             disabled={cooldown}
-            className={`inline-flex items-center gap-0.5 text-base leading-none px-1.5 py-0.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`inline-flex items-center justify-center gap-1 text-base leading-none min-w-[44px] min-h-[44px] px-2.5 py-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               count > 0
                 ? "bg-white/5 border border-border/50 hover:bg-white/10"
                 : "hover:bg-white/10"
