@@ -47,6 +47,7 @@ next-env.d.ts
 
 # omc (oh-my-claudecode state)
 .omc/
+.omx/
 
 # serena cache
 .serena/
@@ -56,6 +57,13 @@ next-env.d.ts
 # claude code
 .claude/tasks/
 .claude/teams/
+.claude/skills/
+
+# AGENTS.md (auto-generated)
+**/AGENTS.md
+
+# docs (auto-generated)
+docs/
 
 # editor
 .idea/
