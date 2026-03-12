@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/model/auth-context";
 import { gaLogin, gaLoginFailed } from "@/shared/lib/gtag";
+import Link from "next/link";
 import { TypeWriter } from "@/shared/ui/TypeWriter";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -131,9 +132,17 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center font-mono text-xs text-[#4DAFFF]/30">
-          GDG Busan Hackathon 2026
-        </p>
+        <div className="text-center space-y-6">
+          <Link
+            href="/lookup"
+            className="inline-block font-mono text-sm text-[#4DAFFF] hover:text-[#00FF88] transition-colors underline underline-offset-4"
+          >
+            참가코드를 모르시나요?
+          </Link>
+          <p className="font-mono text-xs text-[#4DAFFF]/30">
+            GDG Busan Hackathon 2026
+          </p>
+        </div>
       </div>
     </main>
   );
