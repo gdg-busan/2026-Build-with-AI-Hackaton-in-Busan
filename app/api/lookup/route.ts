@@ -4,13 +4,14 @@ import { EVENT_ID } from "@/shared/config/constants";
 
 export async function POST(req: NextRequest) {
   try {
-    const { email } = await req.json();
+    const { email, name } = await req.json();
 
-    if (!email || typeof email !== "string") {
-      return NextResponse.json({ error: "이메일을 입력해주세요" }, { status: 400 });
+    if (!email || typeof email !== "string" || !name || typeof name !== "string") {
+      return NextResponse.json({ error: "이름과 이메일을 모두 입력해주세요" }, { status: 400 });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    const normalizedName = name.trim();
 
     const usersRef = adminDb
       .collection("events")
@@ -21,13 +22,20 @@ export async function POST(req: NextRequest) {
 
     if (snapshot.empty) {
       return NextResponse.json(
-        { error: "등록된 이메일이 없습니다. 예매 시 사용한 이메일을 확인해주세요." },
+        { error: "일치하는 정보가 없습니다. 예매 시 사용한 이름과 이메일을 확인해주세요." },
         { status: 404 }
       );
     }
 
     const doc = snapshot.docs[0];
     const data = doc.data();
+
+    if (data.name !== normalizedName) {
+      return NextResponse.json(
+        { error: "일치하는 정보가 없습니다. 예매 시 사용한 이름과 이메일을 확인해주세요." },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({
       code: doc.id,

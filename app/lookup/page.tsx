@@ -6,6 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 
 export default function LookupPage() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -13,7 +14,7 @@ export default function LookupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!name.trim() || !email.trim()) return;
 
     setIsLoading(true);
     setError("");
@@ -23,7 +24,7 @@ export default function LookupPage() {
       const res = await fetch("/api/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ name: name.trim(), email: email.trim() }),
       });
 
       const data = await res.json();
@@ -53,7 +54,7 @@ export default function LookupPage() {
             참가코드 조회
           </h1>
           <p className="font-mono text-xs text-[#00FF88]/50">
-            예매 시 사용한 이메일로 참가코드를 확인하세요
+            예매 시 사용한 이름과 이메일로 참가코드를 확인하세요
           </p>
         </div>
 
@@ -61,11 +62,24 @@ export default function LookupPage() {
         <div className="border border-[#00FF88]/20 bg-[#1A2235]/60 backdrop-blur rounded-lg p-8 space-y-6">
           <div className="space-y-1">
             <p className="font-mono text-xs text-[#4DAFFF] tracking-wider">
-              {"// 이메일 입력"}
+              {"// 이름 + 이메일 입력"}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setError("");
+                setResult(null);
+              }}
+              placeholder="홍길동"
+              className="font-mono text-sm text-[#00FF88] bg-[#0A0E1A] border-[#00FF88]/30 placeholder:text-[#00FF88]/20 focus:border-[#00FF88] focus:ring-[#00FF88]/20"
+              autoComplete="name"
+              disabled={isLoading}
+            />
             <Input
               type="email"
               value={email}
@@ -88,7 +102,7 @@ export default function LookupPage() {
 
             <Button
               type="submit"
-              disabled={isLoading || !email.trim()}
+              disabled={isLoading || !name.trim() || !email.trim()}
               className="w-full font-mono bg-[#00FF88] text-[#0A0E1A] hover:bg-[#00FF88]/90 disabled:opacity-40 font-bold tracking-wider"
             >
               {isLoading ? (
