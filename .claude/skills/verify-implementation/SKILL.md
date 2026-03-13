@@ -22,6 +22,12 @@ description: 등록된 모든 검증 스킬을 순차 실행하는 통합 검증
 
 ## Workflow
 
+### Step 0: verify 스킬 동적 탐색
+
+`.claude/skills/verify-*/SKILL.md` 패턴으로 등록된 검증 스킬을 자동 탐색합니다. 위 "실행 대상 스킬" 테이블에 없는 새 스킬이 발견되면 함께 실행합니다.
+
+### Step 1: 순차 실행
+
 각 스킬의 SKILL.md를 읽고 Workflow 섹션의 모든 검사를 순차 실행합니다. 각 스킬의 결과를 Output Format에 맞게 수집하고, 최종 종합 보고서를 생성합니다.
 
 ## Output Format

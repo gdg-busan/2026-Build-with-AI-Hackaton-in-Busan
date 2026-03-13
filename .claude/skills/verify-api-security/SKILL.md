@@ -30,6 +30,7 @@ description: API 라우트 보안 패턴 검증. API 라우트 추가/수정 후
 | `app/api/feedback/route.ts` | 익명 피드백 제출/조회 (인증 필요) |
 | `app/api/chat/rooms/route.ts` | 채팅방 목록 조회 (인증 필요) |
 | `app/api/chat/send/route.ts` | 채팅 메시지 전송 (인증 필요) |
+| `app/api/lookup/route.ts` | 이메일+이름으로 코드 조회 (공개 엔드포인트) |
 | `firebase/firestore.rules` | Firestore 보안 규칙 |
 | `src/shared/api/firebase-admin.ts` | Admin SDK (verifyIdToken, adminDb) |
 
@@ -37,10 +38,10 @@ description: API 라우트 보안 패턴 검증. API 라우트 추가/수정 후
 
 ### Step 1: 보호된 API에 토큰 검증 존재 확인
 
-**검사:** 모든 보호된 API 라우트에 `verifyIdToken` 호출이 있어야 함.
+**검사:** 모든 보호된 API 라우트에 `verifyIdToken` 호출이 있어야 함. (`/api/auth`, `/api/lookup`은 공개 엔드포인트이므로 제외)
 
 ```bash
-grep -rn "verifyIdToken" app/api/vote/route.ts app/api/admin/route.ts app/api/team/route.ts app/api/user/route.ts app/api/cheer/route.ts app/api/feedback/route.ts app/api/chat/rooms/route.ts app/api/chat/send/route.ts
+rg -n "verifyIdToken" app/api/vote/route.ts app/api/admin/route.ts app/api/team/route.ts app/api/user/route.ts app/api/cheer/route.ts app/api/feedback/route.ts app/api/chat/rooms/route.ts app/api/chat/send/route.ts
 ```
 
 **PASS:** 모든 보호된 API 파일에서 `verifyIdToken` 호출이 발견됨.
@@ -51,7 +52,7 @@ grep -rn "verifyIdToken" app/api/vote/route.ts app/api/admin/route.ts app/api/te
 **검사:** `/api/admin/route.ts`에서 admin role을 확인해야 함.
 
 ```bash
-grep -n "role.*admin\|admin.*role" app/api/admin/route.ts
+rg -n "role.*admin|admin.*role" app/api/admin/route.ts
 ```
 
 **PASS:** admin role 체크 로직이 존재함.
@@ -59,10 +60,10 @@ grep -n "role.*admin\|admin.*role" app/api/admin/route.ts
 
 ### Step 3: 투표 API 자기 팀 제외 검증
 
-**검사:** `/api/vote/route.ts`에서 자기 팀 투표를 차단해야 함.
+**검사:** `/api/vote/route.ts`에서 `selectedTeams.includes(userTeamId)` 패턴으로 자기 팀 투표를 차단해야 함.
 
 ```bash
-grep -n "teamId\|own.*team\|self.*vote\|자기.*팀" app/api/vote/route.ts
+rg -n "selectedTeams\.includes|userTeamId" app/api/vote/route.ts
 ```
 
 **PASS:** teamId 기반 자기 팀 체크 로직 존재.
@@ -73,7 +74,7 @@ grep -n "teamId\|own.*team\|self.*vote\|자기.*팀" app/api/vote/route.ts
 **검사:** 보호된 API들이 동일한 패턴으로 Bearer 토큰을 추출해야 함.
 
 ```bash
-grep -rn "Bearer\|Authorization" app/api/vote/route.ts app/api/admin/route.ts app/api/team/route.ts app/api/user/route.ts app/api/cheer/route.ts app/api/feedback/route.ts app/api/chat/rooms/route.ts app/api/chat/send/route.ts
+rg -n "Bearer|Authorization" app/api/vote/route.ts app/api/admin/route.ts app/api/team/route.ts app/api/user/route.ts app/api/cheer/route.ts app/api/feedback/route.ts app/api/chat/rooms/route.ts app/api/chat/send/route.ts
 ```
 
 **PASS:** 모든 파일이 `Authorization: Bearer <token>` 패턴 사용.
@@ -84,7 +85,7 @@ grep -rn "Bearer\|Authorization" app/api/vote/route.ts app/api/admin/route.ts ap
 **검사:** votes 컬렉션에 1인 1문서 제한이 있어야 함.
 
 ```bash
-grep -n "votes\|exists\|request.auth.uid" firebase/firestore.rules
+rg -n "votes|exists|request\.auth\.uid" firebase/firestore.rules
 ```
 
 **PASS:** votes 문서 ID = auth UID 강제 및 exists 체크 존재.
@@ -95,7 +96,7 @@ grep -n "votes\|exists\|request.auth.uid" firebase/firestore.rules
 **검사:** 투표 API에서 P1은 participant만, P2는 judge만 투표 가능해야 함.
 
 ```bash
-grep -n "phase.*p1.*participant\|phase.*p2.*judge\|role.*participant\|role.*judge" app/api/vote/route.ts
+rg -ni "voting_p1|voting_p2|phase.*role|role.*participant|role.*judge" app/api/vote/route.ts
 ```
 
 **PASS:** P1=participant, P2=judge 역할 검증 로직이 존재.
@@ -106,7 +107,7 @@ grep -n "phase.*p1.*participant\|phase.*p2.*judge\|role.*participant\|role.*judg
 **검사:** 투표 API에서 `hasVotedP1`/`hasVotedP2` 각각을 체크해야 함.
 
 ```bash
-grep -n "hasVotedP1\|hasVotedP2" app/api/vote/route.ts
+rg -n "hasVotedP1|hasVotedP2" app/api/vote/route.ts
 ```
 
 **PASS:** phase별 hasVoted 플래그 체크가 존재.
@@ -117,7 +118,7 @@ grep -n "hasVotedP1\|hasVotedP2" app/api/vote/route.ts
 **검사:** `resolveFinalTies`, `finalizePhase1`, `resolvePhase1Ties` action들이 입력 검증을 수행해야 함.
 
 ```bash
-grep -n "resolveFinalTies\|finalizePhase1\|resolvePhase1Ties" app/api/admin/route.ts
+rg -n "resolveFinalTies|finalizePhase1|resolvePhase1Ties" app/api/admin/route.ts
 ```
 
 **PASS:** 모든 새 action에서 입력 배열 검증 및 팀 존재 확인 로직이 존재.
@@ -128,7 +129,7 @@ grep -n "resolveFinalTies\|finalizePhase1\|resolvePhase1Ties" app/api/admin/rout
 **검사:** `revealed_final` 상태 전환 시 동점이 있으면 `finalRankingOverrides` 없이 차단되어야 함.
 
 ```bash
-grep -n "revealed_final\|finalRankingOverrides\|detectFinalTies" app/api/admin/route.ts
+rg -n "revealed_final|finalRankingOverrides|detectFinalTies" app/api/admin/route.ts
 ```
 
 **PASS:** 동점 존재 + overrides 미설정 시 400 에러 반환.
@@ -151,5 +152,6 @@ grep -n "revealed_final\|finalRankingOverrides\|detectFinalTies" app/api/admin/r
 ## Exceptions
 
 1. `/api/auth/route.ts`는 공개 엔드포인트이므로 토큰 검증 불필요 (코드 기반 인증 수행)
-2. Firestore Rules의 read 권한은 인증된 모든 사용자에게 열려있는 것이 정상 (실시간 구독 필요)
-3. 개발/테스트 환경에서 임시로 보안 체크를 주석 처리한 경우는 커밋 전 복원 필요
+2. `/api/lookup/route.ts`는 공개 엔드포인트이므로 토큰 검증 불필요 (이메일+이름 기반 코드 조회)
+3. Firestore Rules의 read 권한은 인증된 모든 사용자에게 열려있는 것이 정상 (실시간 구독 필요)
+4. 개발/테스트 환경에서 임시로 보안 체크를 주석 처리한 경우는 커밋 전 복원 필요
