@@ -61,6 +61,70 @@ interface Attendee {
   participationType: string;
 }
 
+const RANDOM_TEAM_ADJECTIVES = [
+  "용감한", "빛나는", "거침없는", "창의적인", "대담한",
+  "열정의", "무한한", "신비로운", "즐거운", "멋진",
+  "화려한", "눈부신", "놀라운", "도전하는", "빠른",
+  "강력한", "영리한", "자유로운", "끈질긴", "유쾌한",
+  "날카로운", "당당한", "든든한", "기막힌", "호기로운",
+  "찬란한", "뜨거운", "묵직한", "기발한", "과감한",
+  "활기찬", "우아한", "젊은", "따뜻한", "시원한",
+  "매서운", "산뜻한", "다정한", "씩씩한", "지혜로운",
+];
+
+const RANDOM_TEAM_NOUNS = [
+  "해커", "코더", "드리머", "빌더", "러너",
+  "메이커", "파이터", "플레이어", "크리에이터", "이노베이터",
+  "탐험가", "개발자", "챌린저", "파이어니어", "마스터",
+  "항해사", "발명가", "사냥꾼", "수호자", "전사",
+  "연금술사", "조종사", "설계자", "개척자", "모험가",
+  "관찰자", "사색가", "예술가", "과학자", "전략가",
+  "몽상가", "여행자", "기사단", "돌격대", "유격대",
+  "특공대", "선봉대", "정찰대", "결사대", "돌풍",
+];
+
+const INVALID_TEAM_NAME_RE = /^[-–—_.,/\\]+$/;
+
+/** Simple string hash → stable unsigned 32-bit integer */
+function stableHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return h >>> 0; // unsigned
+}
+
+const usedPlaceholderNames = new Set<string>();
+
+/** Deterministic placeholder name derived from the attendee's email.
+ *  Appends a numeric suffix on collision so each solo attendee gets their own team. */
+function generateDeterministicTeamName(email: string): string {
+  const h = stableHash(email.toLowerCase());
+  const adj = RANDOM_TEAM_ADJECTIVES[h % RANDOM_TEAM_ADJECTIVES.length];
+  const noun = RANDOM_TEAM_NOUNS[(h >>> 16) % RANDOM_TEAM_NOUNS.length];
+  let name = `${adj} ${noun}`;
+  let suffix = 2;
+  while (usedPlaceholderNames.has(name)) {
+    name = `${adj} ${noun} ${suffix}`;
+    suffix++;
+  }
+  usedPlaceholderNames.add(name);
+  return name;
+}
+
+function isInvalidTeamName(name: string, attendeeName?: string): boolean {
+  if (!name) return true;
+  const trimmed = name.trim();
+  if (!trimmed) return true;
+  if (INVALID_TEAM_NAME_RE.test(trimmed)) return true;
+  if (attendeeName && trimmed === attendeeName.trim()) return true;
+  return false;
+}
+
+function validNameOrDeterministic(candidate: string, attendeeName: string, email: string): string {
+  return isInvalidTeamName(candidate, attendeeName) ? generateDeterministicTeamName(email) : candidate;
+}
+
 /**
  * 팀 정보 문자열에서 팀명을 추출
  * 패턴:
@@ -70,29 +134,29 @@ interface Attendee {
  *   "박시연, 꾸루룩팀"                              → 꾸루룩팀
  *   "임예영 / 프루브"                               → 프루브
  *   "밥값은하자"                                    → 밥값은하자
- *   "이승훈"                                       → 이승훈 (이름=팀명)
+ *   ""  / "-" / 공백 / 본인이름만               → 임의 팀명 생성
  */
-function extractTeamName(teamInfo: string, attendeeName: string): string {
-  if (!teamInfo) return attendeeName;
+function extractTeamName(teamInfo: string, attendeeName: string, email: string): string {
+  if (isInvalidTeamName(teamInfo, attendeeName)) return generateDeterministicTeamName(email);
 
   // "팀명: XXX" 패턴
   const teamNameMatch = teamInfo.match(/팀명\s*[:：]\s*(.+)/);
-  if (teamNameMatch) return teamNameMatch[1].trim();
+  if (teamNameMatch) return validNameOrDeterministic(teamNameMatch[1].trim(), attendeeName, email);
 
   // "이름 / 팀명" 패턴
   if (teamInfo.includes("/")) {
     const parts = teamInfo.split("/");
-    return parts[parts.length - 1].trim();
+    return validNameOrDeterministic(parts[parts.length - 1].trim(), attendeeName, email);
   }
 
   // "이름, 팀명" 패턴 (대표팀원: 이 없는 경우)
   if (teamInfo.includes(",") && !teamInfo.includes("대표팀원")) {
     const parts = teamInfo.split(",");
-    return parts[parts.length - 1].trim();
+    return validNameOrDeterministic(parts[parts.length - 1].trim(), attendeeName, email);
   }
 
-  // 단일 문자열 — 이름과 같으면 그대로, 다르면 팀명으로 취급
-  return teamInfo.trim() || attendeeName;
+  // 단일 문자열
+  return validNameOrDeterministic(teamInfo.trim(), attendeeName, email);
 }
 
 function parseCSVLine(line: string): string[] {
@@ -201,7 +265,7 @@ async function seed() {
   // 팀명 → 참가자 목록
   const teamGroups = new Map<string, Attendee[]>();
   for (const attendee of activeAttendees) {
-    const teamName = extractTeamName(attendee.teamInfo, attendee.name);
+    const teamName = extractTeamName(attendee.teamInfo, attendee.name, attendee.email);
     const existing = teamGroups.get(teamName) || [];
     existing.push(attendee);
     teamGroups.set(teamName, existing);
@@ -243,7 +307,26 @@ async function seed() {
 
   const results: { name: string; email: string; code: string; teamName: string; teamId: string }[] = [];
 
-  // ─── 3. 팀 + 유저 생성 ───
+  // ─── 3. 팀 + 유저 생성 (batched) ───
+  const MAX_BATCH_SIZE = 500;
+  let batch = db.batch();
+  let batchCount = 0;
+
+  const flushBatch = async () => {
+    if (batchCount > 0) {
+      await batch.commit();
+      batch = db.batch();
+      batchCount = 0;
+    }
+  };
+
+  const addToBatch = async () => {
+    batchCount++;
+    if (batchCount >= MAX_BATCH_SIZE) {
+      await flushBatch();
+    }
+  };
+
   for (const [teamName, members] of teamGroups) {
     // 팀 생성 또는 기존 팀 찾기
     let teamId = existingTeamNames.get(teamName);
@@ -253,7 +336,7 @@ async function seed() {
 
       const emoji = TEAM_EMOJIS[(teamsCreated + existingTeams.size) % TEAM_EMOJIS.length];
 
-      await teamsRef.doc(teamId).set({
+      batch.set(teamsRef.doc(teamId), {
         name: teamName,
         nickname: null,
         description: "",
@@ -266,6 +349,7 @@ async function seed() {
         isHidden: false,
         createdAt: new Date(),
       });
+      await addToBatch();
 
       existingTeamNames.set(teamName, teamId);
       teamsCreated++;
@@ -281,14 +365,15 @@ async function seed() {
       if (existingEmails.has(attendee.email)) {
         code = existingEmails.get(attendee.email)!;
         // 기존 유저의 teamId 업데이트
-        await usersRef.doc(code).update({ teamId });
+        batch.update(usersRef.doc(code), { teamId });
+        await addToBatch();
         console.log(`⏭️  이미 등록됨 (팀 업데이트): ${attendee.name} → ${code} (${teamName})`);
         usersSkipped++;
       } else {
         code = generateParticipantCode(nextUserIndex);
         nextUserIndex++;
 
-        await usersRef.doc(code).set({
+        batch.set(usersRef.doc(code), {
           name: attendee.name,
           role: "participant",
           teamId,
@@ -299,6 +384,7 @@ async function seed() {
           participationType: attendee.participationType || null,
           createdAt: new Date(),
         });
+        await addToBatch();
 
         existingEmails.set(attendee.email, code);
         usersCreated++;
@@ -310,8 +396,12 @@ async function seed() {
     }
 
     // 팀의 memberUserIds 업데이트
-    await teamsRef.doc(teamId).update({ memberUserIds: memberCodes });
+    batch.update(teamsRef.doc(teamId), { memberUserIds: memberCodes });
+    await addToBatch();
   }
+
+  // Flush remaining writes
+  await flushBatch();
 
   // ─── 4. 결과 출력 ───
   console.log("\n" + "=".repeat(70));
