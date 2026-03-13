@@ -1,11 +1,11 @@
 ---
 name: verify-implementation
-description: 등록된 모든 검증 스킬을 순차 실행하는 통합 검증. 배포 전 또는 PR 전 사용.
+description: 등록된 모든 검증 스킬을 병렬 실행하는 통합 검증. 배포 전, PR 전, 대규모 리팩토링 후에 사용. "전체 검증", "배포 전 확인", "PR 전 체크" 등의 요청에 사용.
 ---
 
 ## Purpose
 
-등록된 모든 verify 스킬을 순차적으로 실행하고 종합 결과를 보고합니다.
+등록된 모든 verify 스킬을 **병렬**로 실행하고 종합 결과를 보고합니다. 각 검증 스킬은 독립적이므로 동시 실행이 가능합니다.
 
 ## When to Run
 
@@ -19,6 +19,7 @@ description: 등록된 모든 검증 스킬을 순차 실행하는 통합 검증
 |---|------|------|
 | 1 | verify-api-security | API 라우트 보안 패턴 검증 |
 | 2 | verify-firestore-paths | Firestore 경로 일관성 검증 |
+| 3 | verify-tests | Vitest + 빌드 + 린트 + 타입체크 종합 검증 |
 
 ## Workflow
 
@@ -26,9 +27,9 @@ description: 등록된 모든 검증 스킬을 순차 실행하는 통합 검증
 
 `.claude/skills/verify-*/SKILL.md` 패턴으로 등록된 검증 스킬을 자동 탐색합니다. 위 "실행 대상 스킬" 테이블에 없는 새 스킬이 발견되면 함께 실행합니다.
 
-### Step 1: 순차 실행
+### Step 1: 병렬 실행
 
-각 스킬의 SKILL.md를 읽고 Workflow 섹션의 모든 검사를 순차 실행합니다. 각 스킬의 결과를 Output Format에 맞게 수집하고, 최종 종합 보고서를 생성합니다.
+각 스킬의 SKILL.md를 읽고 Workflow 섹션의 모든 검사를 **병렬로** 실행합니다. 각 verify 스킬은 서로 독립적이므로, 가능한 한 동시에 실행하여 전체 검증 시간을 단축합니다. 각 스킬의 결과를 Output Format에 맞게 수집하고, 최종 종합 보고서를 생성합니다.
 
 ## Output Format
 
@@ -44,6 +45,14 @@ description: 등록된 모든 검증 스킬을 순차 실행하는 통합 검증
 | 검사 | 결과 |
 |------|------|
 | ... | ... |
+
+### verify-tests: PASS / FAIL
+| 검사 | 결과 |
+|------|------|
+| Vitest | X/Y PASS |
+| TypeScript | PASS/FAIL |
+| ESLint | PASS/FAIL |
+| Build | PASS/FAIL/SKIPPED |
 
 ### 종합: PASS / FAIL (N개 이슈)
 ```

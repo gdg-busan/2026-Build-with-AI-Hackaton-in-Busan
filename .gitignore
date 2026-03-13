@@ -57,7 +57,6 @@ next-env.d.ts
 # claude code
 .claude/tasks/
 .claude/teams/
-.claude/skills/
 
 # AI coding tool configs
 .adal/
@@ -88,7 +87,6 @@ next-env.d.ts
 .vibe/
 .windsurf/
 .zencoder/
-skills/
 skills-lock.json
 
 # AGENTS.md (auto-generated)
