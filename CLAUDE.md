@@ -73,3 +73,12 @@ events/{eventId}           # status, judgeWeight, participantWeight, maxVotesPer
 ## Design Theme: "Living Terminal"
 
 배경 `#0A0E1A`, 강조 `#00FF88` (터미널 그린), `#4DAFFF` (AI 블루), `#FF6B35` (오렌지). JetBrains Mono + DM Sans 폰트. 글로우/스캔라인/dot-grid 효과.
+
+## Serena Memory Policy
+
+- **세션 시작**: 작업 주제와 관련된 Serena 메모리를 `list_memories` → `read_memory`로 로드한 뒤 작업 시작
+- **자동 저장**: 새로운 아키텍처 패턴, 설계 결정, 의존관계를 발견/구현하면 해당 메모리 자동 업데이트
+- **작업 완료 후**: 구조적 변경(새 API, 새 컬렉션, 새 feature 모듈 등)이 있으면 관련 메모리 반영
+- **메모리 구조**: `architecture/`, `patterns/`, `decisions/` 접두사로 계층 관리
+- **중복 금지**: 새 메모리 작성 전 기존 메모리 확인, 가능하면 기존 메모리 업데이트
+- **CLAUDE.md와 역할 분리**: CLAUDE.md에는 불변 규칙/명령어만, Serena에는 탐색 결과/상세 컨텍스트 저장
