@@ -5,12 +5,21 @@ import Link from "next/link";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 
+const INPUT_CLASS =
+  "font-mono text-sm text-[#00FF88] bg-[#0A0E1A] border-[#00FF88]/30 placeholder:text-[#00FF88]/20 focus:border-[#00FF88] focus:ring-[#00FF88]/20";
+
 export default function LookupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ code: string; name: string } | null>(null);
+
+  const handleInput = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setter(e.target.value);
+    setError("");
+    setResult(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,26 +79,18 @@ export default function LookupPage() {
             <Input
               type="text"
               value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setError("");
-                setResult(null);
-              }}
+              onChange={handleInput(setName)}
               placeholder="홍길동"
-              className="font-mono text-sm text-[#00FF88] bg-[#0A0E1A] border-[#00FF88]/30 placeholder:text-[#00FF88]/20 focus:border-[#00FF88] focus:ring-[#00FF88]/20"
+              className={INPUT_CLASS}
               autoComplete="name"
               disabled={isLoading}
             />
             <Input
               type="email"
               value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setError("");
-                setResult(null);
-              }}
+              onChange={handleInput(setEmail)}
               placeholder="example@gmail.com"
-              className="font-mono text-sm text-[#00FF88] bg-[#0A0E1A] border-[#00FF88]/30 placeholder:text-[#00FF88]/20 focus:border-[#00FF88] focus:ring-[#00FF88]/20"
+              className={INPUT_CLASS}
               autoComplete="email"
               disabled={isLoading}
             />
