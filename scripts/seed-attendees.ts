@@ -83,29 +83,32 @@ const RANDOM_TEAM_NOUNS = [
   "특공대", "선봉대", "정찰대", "결사대", "돌풍",
 ];
 
-const usedRandomTeamNames = new Set<string>();
 const INVALID_TEAM_NAME_RE = /^[-–—_.,/\\]+$/;
 
-function randomPair(): [string, string] {
-  return [
-    RANDOM_TEAM_ADJECTIVES[Math.floor(Math.random() * RANDOM_TEAM_ADJECTIVES.length)],
-    RANDOM_TEAM_NOUNS[Math.floor(Math.random() * RANDOM_TEAM_NOUNS.length)],
-  ];
+/** Simple string hash → stable unsigned 32-bit integer */
+function stableHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return h >>> 0; // unsigned
 }
 
-function generateRandomTeamName(): string {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const [adj, noun] = randomPair();
-    const name = `${adj} ${noun}`;
-    if (!usedRandomTeamNames.has(name)) {
-      usedRandomTeamNames.add(name);
-      return name;
-    }
+const usedPlaceholderNames = new Set<string>();
+
+/** Deterministic placeholder name derived from the attendee's email.
+ *  Appends a numeric suffix on collision so each solo attendee gets their own team. */
+function generateDeterministicTeamName(email: string): string {
+  const h = stableHash(email.toLowerCase());
+  const adj = RANDOM_TEAM_ADJECTIVES[h % RANDOM_TEAM_ADJECTIVES.length];
+  const noun = RANDOM_TEAM_NOUNS[(h >>> 16) % RANDOM_TEAM_NOUNS.length];
+  let name = `${adj} ${noun}`;
+  let suffix = 2;
+  while (usedPlaceholderNames.has(name)) {
+    name = `${adj} ${noun} ${suffix}`;
+    suffix++;
   }
-  // 1,600 조합 소진 시 fallback
-  const [adj, noun] = randomPair();
-  const name = `${adj} ${noun} ${usedRandomTeamNames.size + 1}`;
-  usedRandomTeamNames.add(name);
+  usedPlaceholderNames.add(name);
   return name;
 }
 
@@ -118,8 +121,8 @@ function isInvalidTeamName(name: string, attendeeName?: string): boolean {
   return false;
 }
 
-function validNameOrRandom(candidate: string, attendeeName: string): string {
-  return isInvalidTeamName(candidate, attendeeName) ? generateRandomTeamName() : candidate;
+function validNameOrDeterministic(candidate: string, attendeeName: string, email: string): string {
+  return isInvalidTeamName(candidate, attendeeName) ? generateDeterministicTeamName(email) : candidate;
 }
 
 /**
@@ -133,27 +136,27 @@ function validNameOrRandom(candidate: string, attendeeName: string): string {
  *   "밥값은하자"                                    → 밥값은하자
  *   ""  / "-" / 공백 / 본인이름만               → 임의 팀명 생성
  */
-function extractTeamName(teamInfo: string, attendeeName: string): string {
-  if (isInvalidTeamName(teamInfo, attendeeName)) return generateRandomTeamName();
+function extractTeamName(teamInfo: string, attendeeName: string, email: string): string {
+  if (isInvalidTeamName(teamInfo, attendeeName)) return generateDeterministicTeamName(email);
 
   // "팀명: XXX" 패턴
   const teamNameMatch = teamInfo.match(/팀명\s*[:：]\s*(.+)/);
-  if (teamNameMatch) return validNameOrRandom(teamNameMatch[1].trim(), attendeeName);
+  if (teamNameMatch) return validNameOrDeterministic(teamNameMatch[1].trim(), attendeeName, email);
 
   // "이름 / 팀명" 패턴
   if (teamInfo.includes("/")) {
     const parts = teamInfo.split("/");
-    return validNameOrRandom(parts[parts.length - 1].trim(), attendeeName);
+    return validNameOrDeterministic(parts[parts.length - 1].trim(), attendeeName, email);
   }
 
   // "이름, 팀명" 패턴 (대표팀원: 이 없는 경우)
   if (teamInfo.includes(",") && !teamInfo.includes("대표팀원")) {
     const parts = teamInfo.split(",");
-    return validNameOrRandom(parts[parts.length - 1].trim(), attendeeName);
+    return validNameOrDeterministic(parts[parts.length - 1].trim(), attendeeName, email);
   }
 
   // 단일 문자열
-  return validNameOrRandom(teamInfo.trim(), attendeeName);
+  return validNameOrDeterministic(teamInfo.trim(), attendeeName, email);
 }
 
 function parseCSVLine(line: string): string[] {
@@ -262,7 +265,7 @@ async function seed() {
   // 팀명 → 참가자 목록
   const teamGroups = new Map<string, Attendee[]>();
   for (const attendee of activeAttendees) {
-    const teamName = extractTeamName(attendee.teamInfo, attendee.name);
+    const teamName = extractTeamName(attendee.teamInfo, attendee.name, attendee.email);
     const existing = teamGroups.get(teamName) || [];
     existing.push(attendee);
     teamGroups.set(teamName, existing);
