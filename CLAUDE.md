@@ -69,6 +69,8 @@ events/{eventId}           # status, judgeWeight, participantWeight, maxVotesPer
 | verify-api-security | API 라우트 보안 패턴 검증 |
 | verify-firestore-paths | Firestore 경로 일관성 검증 |
 | verify-implementation | 등록된 모든 검증 스킬 통합 실행 |
+| handoff | 세션 종료 시 HANDOFF.md 생성하여 컨텍스트 전달 |
+| draft-pr | 현재 브랜치 변경사항 분석 후 Draft PR 자동 생성 |
 
 ## Design Theme: "Living Terminal"
 
