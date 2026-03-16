@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDG Busan - 투표 안내</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* =========================================
+   VIEWPORT FITTING: MANDATORY BASE STYLES
+   ========================================= */
+html, body {
+    height: 100%;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+}
+html {
+    scroll-behavior: smooth;
+    overflow: hidden;
+}
+.slide {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+.slide-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-height: 100%;
+    overflow: hidden;
+    padding: var(--slide-padding);
+}
+
+/* =========================================
+   LIVING TERMINAL THEME
+   ========================================= */
+:root {
+    --bg: #0A0E1A;
+    --bg-light: #111827;
+    --green: #00FF88;
+    --green-dim: #00CC6A;
+    --blue: #4DAFFF;
+    --orange: #FF6B35;
+    --white: #E8ECF1;
+    --gray: #6B7280;
+    --gray-light: #9CA3AF;
+
+    --title-size: clamp(1.8rem, 5vw, 4rem);
+    --h2-size: clamp(1.4rem, 3.5vw, 2.8rem);
+    --h3-size: clamp(1rem, 2.5vw, 1.6rem);
+    --body-size: clamp(0.8rem, 1.5vw, 1.15rem);
+    --small-size: clamp(0.7rem, 1.1vw, 0.9rem);
+    --mono-size: clamp(0.7rem, 1.2vw, 1rem);
+
+    --slide-padding: clamp(1.5rem, 5vw, 5rem);
+    --content-gap: clamp(0.5rem, 2vw, 2rem);
+    --element-gap: clamp(0.25rem, 1vw, 1rem);
+
+    --glow-green: 0 0 20px rgba(0,255,136,0.3), 0 0 60px rgba(0,255,136,0.1);
+    --glow-blue: 0 0 20px rgba(77,175,255,0.3), 0 0 60px rgba(77,175,255,0.1);
+    --glow-orange: 0 0 20px rgba(255,107,53,0.3), 0 0 60px rgba(255,107,53,0.1);
+}
+
+body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+}
+
+/* Scanline overlay */
+.slide::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,255,136,0.015) 2px,
+        rgba(0,255,136,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Dot grid */
+.slide::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(0,255,136,0.06) 1px, transparent 1px);
+    background-size: 30px 30px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.slide-content {
+    position: relative;
+    z-index: 2;
+}
+
+/* Typography */
+h1, h2, h3 {
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.2;
+}
+
+h1 { font-size: var(--title-size); font-weight: 700; }
+h2 { font-size: var(--h2-size); font-weight: 600; }
+h3 { font-size: var(--h3-size); font-weight: 500; }
+p, li { font-size: var(--body-size); line-height: 1.6; }
+
+.mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: var(--mono-size);
+}
+
+/* Accent colors */
+.green { color: var(--green); }
+.blue { color: var(--blue); }
+.orange { color: var(--orange); }
+.dim { color: var(--gray-light); }
+
+/* Terminal prompt style */
+.prompt::before {
+    content: '> ';
+    color: var(--green);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Glow text */
+.glow-green { text-shadow: var(--glow-green); color: var(--green); }
+.glow-blue { text-shadow: var(--glow-blue); color: var(--blue); }
+.glow-orange { text-shadow: var(--glow-orange); color: var(--orange); }
+
+/* Cards */
+.card {
+    background: rgba(17,24,39,0.8);
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 12px;
+    padding: clamp(1rem, 2.5vw, 2rem);
+    backdrop-filter: blur(10px);
+}
+
+.card-green { border-color: rgba(0,255,136,0.3); }
+.card-blue { border-color: rgba(77,175,255,0.3); }
+.card-orange { border-color: rgba(255,107,53,0.3); }
+
+/* Phase badge */
+.badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: var(--small-size);
+    font-weight: 600;
+    padding: 0.3em 0.8em;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.badge-green { background: rgba(0,255,136,0.15); color: var(--green); border: 1px solid rgba(0,255,136,0.3); }
+.badge-blue { background: rgba(77,175,255,0.15); color: var(--blue); border: 1px solid rgba(77,175,255,0.3); }
+.badge-orange { background: rgba(255,107,53,0.15); color: var(--orange); border: 1px solid rgba(255,107,53,0.3); }
+
+/* Flow arrow */
+.flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(0.5rem, 2vw, 1.5rem);
+    flex-wrap: wrap;
+}
+.flow-step {
+    text-align: center;
+    padding: clamp(0.6rem, 1.5vw, 1.2rem) clamp(0.8rem, 2vw, 1.5rem);
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: var(--small-size);
+    font-weight: 500;
+    min-width: clamp(80px, 12vw, 140px);
+}
+.flow-arrow {
+    font-size: clamp(1rem, 2vw, 1.5rem);
+    color: var(--gray);
+}
+
+/* Grid layout */
+.two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(1rem, 2vw, 2rem);
+    align-items: start;
+}
+
+/* Score bar */
+.score-bar-container {
+    margin: clamp(0.3rem, 0.5vw, 0.5rem) 0;
+}
+.score-bar-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: var(--small-size);
+    margin-bottom: 0.3em;
+    display: flex;
+    justify-content: space-between;
+}
+.score-bar-track {
+    height: clamp(16px, 2vw, 24px);
+    background: rgba(255,255,255,0.05);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+.score-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Podium */
+.podium {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: clamp(0.5rem, 2vw, 1.5rem);
+    padding-top: clamp(1rem, 3vh, 3rem);
+}
+.podium-item {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.podium-bar {
+    width: clamp(80px, 15vw, 140px);
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: var(--h2-size);
+}
+.podium-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: var(--small-size);
+    padding: clamp(0.3rem, 0.5vw, 0.5rem) 0;
+    color: var(--gray-light);
+}
+.podium-rank {
+    font-size: clamp(1.5rem, 3vw, 2.5rem);
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 0.3em;
+}
+
+/* Navigation */
+.nav-bar {
+    position: fixed;
+    right: clamp(0.5rem, 1.5vw, 1.5rem);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+}
+.nav-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0,255,136,0.4);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+}
+.nav-dot.active {
+    background: var(--green);
+    border-color: var(--green);
+    box-shadow: 0 0 8px rgba(0,255,136,0.5);
+}
+
+.slide-counter {
+    position: fixed;
+    bottom: clamp(0.5rem, 1.5vw, 1.5rem);
+    right: clamp(0.5rem, 1.5vw, 1.5rem);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: var(--small-size);
+    color: var(--gray);
+    z-index: 100;
+}
+
+.keyboard-hint {
+    position: fixed;
+    bottom: clamp(0.5rem, 1.5vw, 1.5rem);
+    left: clamp(0.5rem, 1.5vw, 1.5rem);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.55rem, 0.8vw, 0.75rem);
+    color: var(--gray);
+    z-index: 100;
+}
+
+/* Animations */
+.reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-5 { transition-delay: 0.5s; }
+
+/* Typing cursor blink */
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+.cursor::after {
+    content: '█';
+    animation: blink 1s step-end infinite;
+    color: var(--green);
+    margin-left: 2px;
+}
+
+/* Glow pulse */
+@keyframes glow-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+/* Number emphasis */
+.big-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(2.5rem, 7vw, 5rem);
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Rule list */
+.rule-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.4rem, 1vh, 0.8rem);
+}
+.rule-list li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6em;
+    font-size: var(--body-size);
+}
+.rule-list li::before {
+    content: '//';
+    color: var(--green);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* Formula block */
+.formula {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.7rem, 1.3vw, 1.1rem);
+    background: rgba(0,255,136,0.05);
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 8px;
+    padding: clamp(0.8rem, 1.5vw, 1.5rem);
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
+
+/* Weight visual */
+.weight-visual {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.3rem, 0.8vw, 0.8rem);
+    margin: clamp(0.3rem, 0.5vh, 0.5rem) 0;
+}
+.weight-bar {
+    height: clamp(28px, 4vw, 40px);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: var(--small-size);
+    font-weight: 600;
+    transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+    .two-col {
+        grid-template-columns: 1fr;
+    }
+    .flow {
+        flex-direction: column;
+    }
+    .flow-arrow {
+        transform: rotate(90deg);
+    }
+}
+
+@media (max-height: 700px) {
+    :root {
+        --slide-padding: clamp(0.75rem, 3vw, 2rem);
+        --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+        --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
+        --h2-size: clamp(1rem, 3vw, 1.75rem);
+    }
+}
+
+@media (max-height: 600px) {
+    :root {
+        --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+        --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+        --title-size: clamp(1.1rem, 4vw, 2rem);
+        --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
+    }
+    .nav-bar, .keyboard-hint {
+        display: none;
+    }
+}
+
+@media (max-height: 500px) {
+    :root {
+        --slide-padding: clamp(0.4rem, 2vw, 1rem);
+        --title-size: clamp(1rem, 3.5vw, 1.5rem);
+        --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
+        --body-size: clamp(0.65rem, 1vw, 0.85rem);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+    }
+    html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav-bar" id="navBar"></nav>
+<div class="slide-counter" id="slideCounter"></div>
+<div class="keyboard-hint">↑↓ / ← → / Space</div>
+
+<!-- ============================================
+     SLIDE 1: TITLE
+     ============================================ -->
+<section class="slide" data-slide="0">
+    <div class="slide-content" style="align-items: center; text-align: center;">
+        <div class="reveal">
+            <span class="badge badge-green" style="margin-bottom: clamp(0.5rem, 1.5vh, 1.5rem);">GDG Busan · Build with AI 해커톤</span>
+        </div>
+        <h1 class="reveal reveal-delay-1" style="margin: clamp(0.3rem,1vh,0.8rem) 0;">
+            <span class="glow-green">투표 안내</span>
+        </h1>
+        <p class="reveal reveal-delay-2 mono dim" style="max-width: 600px;">
+            25팀 중 최고의 팀을 선정하는<br>2단계 투표 시스템
+        </p>
+        <p class="reveal reveal-delay-3 mono" style="color: var(--gray); margin-top: clamp(1rem, 3vh, 3rem); font-size: var(--small-size);">
+            <span class="green">▼</span> 아래로 스크롤하여 시작
+        </p>
+    </div>
+</section>
+
+<!-- ============================================
+     SLIDE 2: OVERVIEW FLOW
+     ============================================ -->
+<section class="slide" data-slide="1">
+    <div class="slide-content" style="align-items: center; text-align: center;">
+        <h2 class="reveal" style="margin-bottom: var(--content-gap);">전체 <span class="green">투표 흐름</span></h2>
+
+        <div class="flow reveal reveal-delay-1" style="margin-bottom: var(--content-gap);">
+            <div class="flow-step" style="background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3); color: var(--green);">
+                1차 투표<br><span style="font-size: 0.8em; opacity: 0.7;">참가자 전원</span>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" style="background: rgba(255,107,53,0.1); border: 1px solid rgba(255,107,53,0.3); color: var(--orange);">
+                TOP 10<br><span style="font-size: 0.8em; opacity: 0.7;">선정</span>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" style="background: rgba(77,175,255,0.1); border: 1px solid rgba(77,175,255,0.3); color: var(--blue);">
+                2차 투표<br><span style="font-size: 0.8em; opacity: 0.7;">심사위원</span>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step" style="background: rgba(255,107,53,0.1); border: 1px solid rgba(255,107,53,0.3); color: var(--orange);">
+                최종 TOP 3<br><span style="font-size: 0.8em; opacity: 0.7;">수상팀 발표</span>
+            </div>
+        </div>
+
+        <div class="two-col reveal reveal-delay-2" style="max-width: 800px; width: 100%;">
+            <div class="card card-green" style="text-align: left;">
+                <h3 style="color: var(--green); margin: 0 0 0.5em;">1차 투표</h3>
+                <p class="mono dim" style="margin: 0;">참가자가 직접<br>마음에 드는 팀에 투표</p>
+            </div>
+            <div class="card card-blue" style="text-align: left;">
+                <h3 style="color: var(--blue); margin: 0 0 0.5em;">2차 투표</h3>
+                <p class="mono dim" style="margin: 0;">심사위원이<br>TOP 10 중에서 심사</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     SLIDE 3: PHASE 1 — WHO & WHAT
+     ============================================ -->
+<section class="slide" data-slide="2">
+    <div class="slide-content">
+        <div class="reveal">
+            <span class="badge badge-green">Phase 1</span>
+        </div>
+        <h2 class="reveal reveal-delay-1" style="margin: clamp(0.3rem,1vh,0.8rem) 0;">
+            1차 투표 — <span class="glow-green">참가자 투표</span>
+        </h2>
+
+        <div class="two-col reveal reveal-delay-2" style="margin-top: var(--content-gap);">
+            <div>
+                <div class="card card-green" style="margin-bottom: var(--element-gap);">
+                    <h3 style="color: var(--green); margin: 0 0 0.5em;">누가 투표하나요?</h3>
+                    <p style="margin: 0; font-size: var(--body-size);">해커톤에 참가한 <strong class="green">모든 참가자</strong>가 투표합니다.</p>
+                </div>
+                <div class="card card-green">
+                    <h3 style="color: var(--green); margin: 0 0 0.5em;">어디에 투표하나요?</h3>
+                    <p style="margin: 0; font-size: var(--body-size);"><strong>자기 팀을 제외한</strong> 전체 팀 중에서 선택합니다.</p>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <div class="big-num glow-green reveal reveal-delay-3">3팀</div>
+                <p class="mono dim" style="text-align: center; margin-top: 0.5em;">1인당 최대 투표 수</p>
+                <p class="mono" style="font-size: var(--small-size); color: var(--gray); text-align: center; margin-top: 0.3em;">
+                    (한 팀에 중복 투표 불가)
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     SLIDE 4: PHASE 1 — RULES
+     ============================================ -->
+<section class="slide" data-slide="3">
+    <div class="slide-content">
+        <div class="reveal">
+            <span class="badge badge-green">Phase 1</span>
+        </div>
+        <h2 class="reveal reveal-delay-1" style="margin: clamp(0.3rem,1vh,0.8rem) 0;">
+            1차 투표 <span class="green">규칙</span>
+        </h2>
+
+        <ul class="rule-list reveal reveal-delay-2" style="margin-top: var(--content-gap); max-width: 700px;">
+            <li>1~3팀을 자유롭게 선택하여 투표</li>
+            <li><strong class="orange">자기 팀에는 투표할 수 없습니다</strong></li>
+            <li>투표는 <strong>1회만</strong> 가능 (수정 불가)</li>
+            <li>제한 시간 내에 투표해 주세요</li>
+            <li>가장 많은 표를 받은 <strong class="green">상위 10팀</strong>이 2차에 진출</li>
+        </ul>
+
+        <div class="card reveal reveal-delay-3" style="margin-top: var(--content-gap); max-width: 700px; border-color: rgba(255,107,53,0.3);">
+            <p class="mono" style="margin: 0; font-size: var(--small-size);">
+                <span class="orange">⚠</span> 투표 제출 후에는 변경이 불가합니다. 신중하게 선택해 주세요!
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     SLIDE 5: PHASE 1 RESULT — TOP 10
+     ============================================ -->
+<section class="slide" data-slide="4">
+    <div class="slide-content" style="align-items: center; text-align: center;">
+        <div class="reveal">
+            <span class="badge badge-orange">Phase 1 Result</span>
+        </div>
+        <h2 class="reveal reveal-delay-1" style="margin: clamp(0.3rem,1vh,0.8rem) 0;">
+            1차 결과 → <span class="glow-orange">TOP 10</span> 선정
+        </h2>
+
+        <div class="reveal reveal-delay-2" style="margin: var(--content-gap) 0; display: flex; align-items: center; gap: clamp(1rem, 3vw, 3rem); flex-wrap: wrap; justify-content: center;">
+            <div>
+                <div class="big-num" style="color: var(--gray);">25팀</div>
+                <p class="mono dim" style="margin-top: 0.3em;">전체 참가팀</p>
+            </div>
+            <div style="font-size: clamp(1.5rem, 3vw, 2.5rem); color: var(--green);">→</div>
+            <div>
+                <div class="big-num glow-orange">10팀</div>
+                <p class="mono dim" style="margin-top: 0.3em;">2차 진출팀</p>
+            </div>
+        </div>
+
+        <div class="card reveal reveal-delay-3" style="max-width: 600px; text-align: left;">
+            <p style="margin: 0; font-size: var(--body-size);">
+                참가자 투표에서 <strong class="green">가장 많은 표를 받은 상위 10팀</strong>이
+                2차 심사위원 투표로 진출합니다.
+            </p>
+            <p class="mono dim" style="margin: 0.5em 0 0; font-size: var(--small-size);">
+                동률 발생 시 운영진이 공정하게 조정합니다.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     SLIDE 6: PHASE 2 — JUDGE VOTING
+     ============================================ -->
+<section class="slide" data-slide="5">
+    <div class="slide-content">
+        <div class="reveal">
+            <span class="badge badge-blue">Phase 2</span>
+        </div>
+        <h2 class="reveal reveal-delay-1" style="margin: clamp(0.3rem,1vh,0.8rem) 0;">
+            2차 투표 — <span class="glow-blue">심사위원 투표</span>
+        </h2>
+
+        <div class="two-col reveal reveal-delay-2" style="margin-top: var(--content-gap);">
+            <div>
+                <div class="card card-blue" style="margin-bottom: var(--element-gap);">
+                    <h3 style="color: var(--blue); margin: 0 0 0.5em;">누가 투표하나요?</h3>
+                    <p style="margin: 0; font-size: var(--body-size);"><strong class="blue">심사위원</strong>이 투표합니다.</p>
+                </div>
+                <div class="card card-blue">
+                    <h3 style="color: var(--blue); margin: 0 0 0.5em;">어디에 투표하나요?</h3>
+                    <p style="margin: 0; font-size: var(--body-size);">1차에서 선정된 <strong class="orange">TOP 10팀</strong> 중에서만 선택합니다.</p>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <div class="big-num glow-blue reveal reveal-delay-3">3팀</div>
+                <p class="mono dim" style="text-align: center; margin-top: 0.5em;">심사위원 1인당 최대 투표 수</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     SLIDE 7: SCORING — WEIGHTS
+     ============================================ -->
+<section class="slide" data-slide="6">
+    <div class="slide-content" style="align-items: center;">
+        <h2 class="reveal" style="margin-bottom: var(--content-gap); text-align: center;">
+            최종 점수 <span class="green">가중치</span>
+        </h2>
+
+        <div class="reveal reveal-delay-1" style="width: 100%; max-width: 700px;">
+            <!-- Judge weight -->
+            <div class="weight-visual">
+                <span class="mono blue" style="min-width: clamp(60px,10vw,100px); text-align: right;">심사위원</span>
+                <div class="weight-bar" style="width: 80%; background: linear-gradient(90deg, rgba(77,175,255,0.3), rgba(77,175,255,0.6));">
+                    <span class="blue" style="font-size: var(--h3-size);">80%</span>
+                </div>
+            </div>
+            <!-- Participant weight -->
+            <div class="weight-visual">
+                <span class="mono green" style="min-width: clamp(60px,10vw,100px); text-align: right;">참가자</span>
+                <div class="weight-bar" style="width: 20%; background: linear-gradient(90deg, rgba(0,255,136,0.3), rgba(0,255,136,0.6));">
+                    <span class="green" style="font-size: var(--h3-size);">20%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="formula reveal reveal-delay-2" style="margin-top: var(--content-gap); max-width: 700px; width: 100%;">최종 점수 = <span class="blue">(심사위원 정규화 점수 × 0.8)</span>
+         + <span class="green">(참가자 정규화 점수 × 0.2)</span></div>
+
+        <div class="card reveal reveal-delay-3" style="margin-top: var(--element-gap); max-width: 700px; text-align: left;">
+            <p style="margin: 0; font-size: var(--small-size);" class="mono dim">
+                정규화 = (해당 팀 득표수 ÷ 최다 득표수) × 100<br>
+                → 가장 많은 표를 받은 팀이 100점 기준이 됩니다.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     SLIDE 8: SCORING EXAMPLE
+     ============================================ -->
+<section class="slide" data-slide="7">
+    <div class="slide-content">
+        <h2 class="reveal" style="margin-bottom: var(--content-gap);">점수 계산 <span class="orange">예시</span></h2>
+
+        <div class="reveal reveal-delay-1" style="max-width: 750px;">
+            <p class="mono dim" style="font-size: var(--small-size); margin-bottom: var(--element-gap);">
+                심사위원 최다 득표: 10표 · 참가자 최다 득표: 10표
+            </p>
+
+            <!-- Team A -->
+            <div class="card" style="margin-bottom: var(--element-gap); padding: clamp(0.6rem,1.5vw,1.2rem);">
+                <div class="score-bar-label">
+                    <span><strong>Team A</strong> — 심사위원 8표 · 참가자 5표</span>
+                    <span class="orange" style="font-weight:700;">74.0점</span>
+                </div>
+                <div class="score-bar-track">
+                    <div class="score-bar-fill" style="width: 74%; background: linear-gradient(90deg, var(--blue), var(--green));"></div>
+                </div>
+                <p class="mono dim" style="font-size: clamp(0.6rem,0.9vw,0.8rem); margin: 0.3em 0 0;">
+                    <span class="blue">(8/10)×100×0.8=64</span> + <span class="green">(5/10)×100×0.2=10</span> = <span class="orange">74.0</span>
+                </p>
+            </div>
+
+            <!-- Team B -->
+            <div class="card" style="margin-bottom: var(--element-gap); padding: clamp(0.6rem,1.5vw,1.2rem);">
+                <div class="score-bar-label">
+                    <span><strong>Team B</strong> — 심사위원 10표 · 참가자 10표</span>
+                    <span class="orange" style="font-weight:700;">100.0점</span>
+                </div>
+                <div class="score-bar-track">
+                    <div class="score-bar-fill" style="width: 100%; background: linear-gradient(90deg, var(--blue), var(--green));"></div>
+                </div>
+                <p class="mono dim" style="font-size: clamp(0.6rem,0.9vw,0.8rem); margin: 0.3em 0 0;">
+                    <span class="blue">(10/10)×100×0.8=80</span> + <span class="green">(10/10)×100×0.2=20</span> = <span class="orange">100.0</span>
+                </p>
+            </div>
+
+            <!-- Team C -->
+            <div class="card" style="padding: clamp(0.6rem,1.5vw,1.2rem);">
+                <div class="score-bar-label">
+                    <span><strong>Team C</strong> — 심사위원 6표 · 참가자 9표</span>
+                    <span class="orange" style="font-weight:700;">66.0점</span>
+                </div>
+                <div class="score-bar-track">
+                    <div class="score-bar-fill" style="width: 66%; background: linear-gradient(90deg, var(--blue), var(--green));"></div>
+                </div>
+                <p class="mono dim" style="font-size: clamp(0.6rem,0.9vw,0.8rem); margin: 0.3em 0 0;">
+                    <span class="blue">(6/10)×100×0.8=48</span> + <span class="green">(9/10)×100×0.2=18</span> = <span class="orange">66.0</span>
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     SLIDE 9: FINAL RESULT — TOP 3
+     ============================================ -->
+<section class="slide" data-slide="8">
+    <div class="slide-content" style="align-items: center; text-align: center;">
+        <h2 class="reveal" style="margin-bottom: var(--content-gap);">
+            최종 결과 — <span class="glow-orange">TOP 3</span> 수상
+        </h2>
+
+        <div class="podium reveal reveal-delay-1">
+            <!-- 2nd place -->
+            <div class="podium-item">
+                <div class="podium-rank" style="color: var(--gray-light);">🥈</div>
+                <div class="podium-label">2nd</div>
+                <div class="podium-bar" style="height: clamp(80px,15vh,140px); background: linear-gradient(180deg, rgba(77,175,255,0.3), rgba(77,175,255,0.1));">
+                    <span class="blue">2</span>
+                </div>
+            </div>
+            <!-- 1st place -->
+            <div class="podium-item">
+                <div class="podium-rank" style="color: var(--orange);">🥇</div>
+                <div class="podium-label">1st</div>
+                <div class="podium-bar" style="height: clamp(120px,22vh,200px); background: linear-gradient(180deg, rgba(255,107,53,0.4), rgba(255,107,53,0.1));">
+                    <span class="orange">1</span>
+                </div>
+            </div>
+            <!-- 3rd place -->
+            <div class="podium-item">
+                <div class="podium-rank" style="color: var(--green);">🥉</div>
+                <div class="podium-label">3rd</div>
+                <div class="podium-bar" style="height: clamp(60px,11vh,100px); background: linear-gradient(180deg, rgba(0,255,136,0.3), rgba(0,255,136,0.1));">
+                    <span class="green">3</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card reveal reveal-delay-2" style="max-width: 600px; margin-top: var(--content-gap); text-align: left;">
+            <p style="margin: 0; font-size: var(--body-size);">
+                <span class="blue">심사위원 투표(80%)</span> + <span class="green">참가자 투표(20%)</span>의<br>
+                가중 합산 점수로 <strong class="orange">최종 TOP 3</strong>을 선정합니다.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     SLIDE 10: SUMMARY
+     ============================================ -->
+<section class="slide" data-slide="9">
+    <div class="slide-content" style="align-items: center; text-align: center;">
+        <h2 class="reveal" style="margin-bottom: var(--content-gap);">
+            <span class="green">요약</span>
+        </h2>
+
+        <div class="reveal reveal-delay-1" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: var(--element-gap); max-width: 800px; width: 100%;">
+            <div class="card card-green" style="text-align: center;">
+                <div class="mono green" style="font-size: var(--h3-size); font-weight: 700;">1차</div>
+                <p class="dim" style="margin: 0.3em 0 0; font-size: var(--small-size);">참가자 전원이<br>최대 3팀 투표</p>
+            </div>
+            <div class="card card-orange" style="text-align: center;">
+                <div class="mono orange" style="font-size: var(--h3-size); font-weight: 700;">TOP 10</div>
+                <p class="dim" style="margin: 0.3em 0 0; font-size: var(--small-size);">1차 투표 결과<br>상위 10팀 선정</p>
+            </div>
+            <div class="card card-blue" style="text-align: center;">
+                <div class="mono blue" style="font-size: var(--h3-size); font-weight: 700;">2차</div>
+                <p class="dim" style="margin: 0.3em 0 0; font-size: var(--small-size);">심사위원이<br>TOP 10 중 3팀 투표</p>
+            </div>
+            <div class="card card-orange" style="text-align: center;">
+                <div class="mono orange" style="font-size: var(--h3-size); font-weight: 700;">TOP 3</div>
+                <p class="dim" style="margin: 0.3em 0 0; font-size: var(--small-size);">심사위원 80%<br>+ 참가자 20%</p>
+            </div>
+        </div>
+
+        <p class="reveal reveal-delay-2 mono" style="color: var(--green); margin-top: var(--content-gap); font-size: var(--body-size);">
+            여러분의 한 표가 최고의 팀을 결정합니다!<span class="cursor"></span>
+        </p>
+    </div>
+</section>
+
+<!-- ============================================
+     JAVASCRIPT: Navigation & Animations
+     ============================================ -->
+<script>
+(function() {
+    'use strict';
+
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    let currentSlide = 0;
+    let isScrolling = false;
+
+    // Build navigation dots
+    const navBar = document.getElementById('navBar');
+    slides.forEach((_, i) => {
+        const dot = document.createElement('button');
+        dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+        dot.setAttribute('aria-label', `Slide ${i + 1}`);
+        dot.addEventListener('click', () => goToSlide(i));
+        navBar.appendChild(dot);
+    });
+
+    function updateCounter() {
+        document.getElementById('slideCounter').textContent =
+            `${currentSlide + 1} / ${totalSlides}`;
+    }
+
+    function updateDots() {
+        navBar.querySelectorAll('.nav-dot').forEach((dot, i) => {
+            dot.classList.toggle('active', i === currentSlide);
+        });
+    }
+
+    function goToSlide(index) {
+        if (index < 0 || index >= totalSlides || isScrolling) return;
+        isScrolling = true;
+        currentSlide = index;
+        slides[index].scrollIntoView({ behavior: 'smooth' });
+        updateCounter();
+        updateDots();
+        setTimeout(() => { isScrolling = false; }, 600);
+    }
+
+    function nextSlide() { goToSlide(currentSlide + 1); }
+    function prevSlide() { goToSlide(currentSlide - 1); }
+
+    // Keyboard
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ') {
+            e.preventDefault();
+            nextSlide();
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            prevSlide();
+        }
+    });
+
+    // Mouse wheel — accumulate delta, fire on threshold
+    let wheelAccum = 0;
+    let wheelLock = false;
+    document.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (wheelLock) return;
+        wheelAccum += e.deltaY;
+        if (Math.abs(wheelAccum) >= 50) {
+            wheelLock = true;
+            if (wheelAccum > 0) nextSlide();
+            else prevSlide();
+            wheelAccum = 0;
+            setTimeout(() => { wheelLock = false; }, 700);
+        }
+    }, { passive: false });
+
+    // Touch
+    let touchStartY = 0;
+    document.addEventListener('touchstart', (e) => {
+        touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', (e) => {
+        const diff = touchStartY - e.changedTouches[0].clientY;
+        if (Math.abs(diff) > 50) {
+            if (diff > 0) nextSlide();
+            else prevSlide();
+        }
+    }, { passive: true });
+
+    // Intersection Observer for reveal animations
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.querySelectorAll('.reveal').forEach(el => {
+                    el.classList.add('visible');
+                });
+                // Update current slide index from scroll
+                const idx = parseInt(entry.target.dataset.slide);
+                if (!isNaN(idx)) {
+                    currentSlide = idx;
+                    updateCounter();
+                    updateDots();
+                }
+            } else {
+                entry.target.querySelectorAll('.reveal').forEach(el => {
+                    el.classList.remove('visible');
+                });
+            }
+        });
+    }, { threshold: 0.5 });
+
+    slides.forEach(slide => observer.observe(slide));
+
+    updateCounter();
+})();
+</script>
+
+</body>
+</html>

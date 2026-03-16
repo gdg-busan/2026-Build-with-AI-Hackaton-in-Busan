@@ -94,6 +94,7 @@ skills-lock.json
 
 # docs (auto-generated)
 docs/
+!public/docs/
 
 # editor
 .idea/
