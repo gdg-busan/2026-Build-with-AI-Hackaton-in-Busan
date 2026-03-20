@@ -217,9 +217,7 @@ describe("Data Integrity: Admin reset consistency", () => {
     const p1Votes: Vote[] = [
       makeVote({ voterId: "u1", selectedTeams: ["t1", "t2"], role: "participant", phase: "p1" }),
     ];
-    const p2Votes: Vote[] = [
-      makeVote({ voterId: "j1", selectedTeams: ["t1"], role: "judge", phase: "p2" }),
-    ];
+    // p2 votes would exist before reset but are deleted by resetPhase2Votes
 
     // After resetPhase2Votes: only p1 votes remain
     const votesAfterReset = p1Votes; // p2 votes deleted
@@ -309,7 +307,8 @@ describe("Data Integrity: State transition rules", () => {
       phase1SelectedTeamIds: undefined,
     };
 
-    for (const status of requiresPhase1) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for (const _status of requiresPhase1) {
       const hasPhase1Selection = mockEvent.phase1SelectedTeamIds && mockEvent.phase1SelectedTeamIds.length > 0;
       expect(hasPhase1Selection).toBeFalsy();
       // This simulates the API check: cannot transition without phase1SelectedTeamIds

@@ -26,7 +26,8 @@ function makeDocRef(id = "doc-id") {
     set: mockDocSet,
     update: mockDocUpdate,
     delete: mockDocDelete,
-    collection: (name: string) => ({
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    collection: (_name: string) => ({
       doc: mockCollectionDoc.mockReturnValue(makeDocRef()),
       get: mockCollectionGet,
       where: mockCollectionWhere.mockReturnValue({
@@ -38,7 +39,7 @@ function makeDocRef(id = "doc-id") {
   };
 }
 
-const mockDoc = vi.fn().mockImplementation((_path?: string) => makeDocRef());
+const mockDoc = vi.fn().mockImplementation((_path?: string) => makeDocRef()); // eslint-disable-line @typescript-eslint/no-unused-vars -- callback signature required by mock
 const mockCollection = vi.fn().mockImplementation(() => ({
   doc: mockCollectionDoc.mockReturnValue(makeDocRef()),
   get: mockCollectionGet,

@@ -33,7 +33,7 @@ function makeDocRef(id = "doc-id") {
   };
 }
 
-const mockDoc = vi.fn().mockImplementation((_path?: string) => makeDocRef());
+const mockDoc = vi.fn().mockImplementation((_path?: string) => makeDocRef()); // eslint-disable-line @typescript-eslint/no-unused-vars -- callback signature required by mock
 const mockCollection = vi.fn().mockImplementation(() => ({
   doc: mockDoc,
   get: mockCollectionGet,

@@ -321,7 +321,6 @@ export default function AdminPage() {
       autoClosedDeadlineRef.current !== currentDeadline
     ) {
       const next = NEXT_STATUS_MAP[eventConfig.status]!;
-      const currentStatus = eventConfig.status;
       autoClosedDeadlineRef.current = currentDeadline;
       callAdminApi("updateEventStatus", { status: next.status })
         .then(() => {
