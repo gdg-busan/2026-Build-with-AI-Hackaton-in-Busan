@@ -24,7 +24,7 @@ service cloud.firestore {
         }
       }
 
-      // Users - readable by admins, own doc readable by self
+      // Users - own doc readable by self, all docs readable by admin
       match /users/{uniqueCode} {
         allow read: if request.auth != null && (
           request.auth.token.role == 'admin' ||

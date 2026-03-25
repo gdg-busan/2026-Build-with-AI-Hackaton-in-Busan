@@ -22,6 +22,7 @@ export function CheerButton({ teamId }: CheerButtonProps) {
 
   // Subscribe to cheers subcollection for emoji breakdown
   useEffect(() => {
+    if (!user) return;
     const cheersRef = collection(
       getFirebaseDb(),
       "events",
@@ -39,7 +40,7 @@ export function CheerButton({ teamId }: CheerButtonProps) {
       setEmojiCounts(counts);
     });
     return () => unsub();
-  }, [teamId]);
+  }, [teamId, user]);
 
   const handleCheer = async (emoji: string) => {
     if (cooldown || !user) return;

@@ -21,12 +21,13 @@ export function MissionPanel() {
 
   // Fetch team count for dynamic mission targets
   useEffect(() => {
+    if (!user) return;
     const teamsRef = collection(getFirebaseDb(), "events", EVENT_ID, "teams");
     const unsub = onSnapshot(teamsRef, (snap) => {
       setTeamCount(snap.size);
     });
     return () => unsub();
-  }, []);
+  }, [user]);
 
   // Subscribe to user doc for allMissionsCompletedAt
   useEffect(() => {

@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/shared/api/firebase";
 import { EVENT_ID } from "@/shared/config/constants";
+import { useAuth } from "@/features/auth/model/auth-context";
 
 interface FloatingEmoji {
   id: string;
@@ -23,10 +24,12 @@ interface CheerAnimationProps {
 }
 
 export function CheerAnimation({ teamId }: CheerAnimationProps) {
+  const { user } = useAuth();
   const [floaters, setFloaters] = useState<FloatingEmoji[]>([]);
   const seenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    if (!user) return;
     const cheersRef = collection(
       getFirebaseDb(),
       "events",
@@ -71,7 +74,7 @@ export function CheerAnimation({ teamId }: CheerAnimationProps) {
     });
 
     return () => unsub();
-  }, [teamId]);
+  }, [teamId, user]);
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
