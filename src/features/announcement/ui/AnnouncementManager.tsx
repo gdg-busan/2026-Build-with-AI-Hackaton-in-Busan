@@ -4,17 +4,20 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { getFirebaseDb } from "@/shared/api/firebase";
 import { EVENT_ID } from "@/shared/config/constants";
+import { useAuth } from "@/features/auth/model/auth-context";
 import type { Announcement } from "@/shared/types";
 import { AnnouncementOverlay } from "./AnnouncementOverlay";
 import { AnnouncementTicker } from "./AnnouncementTicker";
 
 export function AnnouncementManager() {
+  const { user } = useAuth();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [overlayAnnouncement, setOverlayAnnouncement] = useState<Announcement | null>(null);
   const prevIdsRef = useRef<Set<string>>(new Set());
   const isFirstLoad = useRef(true);
 
   useEffect(() => {
+    if (!user) return;
     const q = query(
       collection(getFirebaseDb(), "events", EVENT_ID, "announcements"),
       where("active", "==", true)
@@ -49,7 +52,7 @@ export function AnnouncementManager() {
       setAnnouncements(items);
     });
     return () => unsub();
-  }, []);
+  }, [user]);
 
   const handleOverlayDismiss = useCallback(() => {
     setOverlayAnnouncement(null);

@@ -46,6 +46,7 @@ export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!user) return;
     const db = getFirebaseDb();
     const feedbacksRef = collection(
       db,
@@ -77,7 +78,7 @@ export function FeedbackBoard({ teamId, isTeamMember }: FeedbackBoardProps) {
     });
 
     return () => unsubscribe();
-  }, [teamId]);
+  }, [teamId, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

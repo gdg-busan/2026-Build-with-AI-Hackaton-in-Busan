@@ -18,6 +18,7 @@ import {
 import type { Team, MemberProfile } from "@/shared/types";
 import { FeedbackBoard } from "@/features/feedback/ui/FeedbackBoard";
 import { gaExternalLinkClick } from "@/shared/lib/gtag";
+import { useAuth } from "@/features/auth/model/auth-context";
 
 interface CheerEntry {
   id: string;
@@ -51,11 +52,12 @@ export function TeamDetailSheet({
   members = [],
   isTeamMember = false,
 }: TeamDetailSheetProps) {
+  const { user } = useAuth();
   const [cheers, setCheers] = useState<CheerEntry[]>([]);
 
   // Subscribe to recent cheers
   useEffect(() => {
-    if (!team) return;
+    if (!team || !user) return;
     const cheersRef = collection(
       getFirebaseDb(),
       "events",
@@ -82,7 +84,7 @@ export function TeamDetailSheet({
       unsub();
       setCheers([]);
     };
-  }, [team]);
+  }, [team, user]);
 
   if (!team) return null;
 
