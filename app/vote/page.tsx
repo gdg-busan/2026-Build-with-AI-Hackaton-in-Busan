@@ -23,11 +23,8 @@ import { cn } from "@/shared/lib/utils";
 import {
   collection,
   doc,
-  documentId,
-  getDocs,
   onSnapshot,
   query,
-  where,
 } from "firebase/firestore";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, LogOut, Pencil, Trophy, UserPen, Search, Bookmark, X } from "lucide-react";
@@ -171,32 +168,28 @@ export default function VotePage() {
     return () => unsub();
   }, [user, eventStatus]);
 
-  // Total eligible voters (participants only)
+  // Total eligible voters (participants only) - fetched via API to avoid PII exposure
   useEffect(() => {
     if (!user) return;
-    const unsub = onSnapshot(
-      collection(getFirebaseDb(), "events", EVENT_ID, "users"),
-      (snap) => {
-        setTotalCount(
-          snap.docs.filter((d) => d.data().role === "participant").length,
-        );
-
-        // Also update voteSuccess based on hasVotedP1/hasVotedP2
-        if (eventStatus) {
-          const myUserDoc = snap.docs.find((d) => d.id === user.uniqueCode);
-          if (myUserDoc) {
-            const userData = myUserDoc.data();
-            if (eventStatus === "voting_p1" && userData.hasVotedP1) {
-              setVoteSuccess(true);
-            } else if (eventStatus === "voting_p2" && userData.hasVotedP2) {
-              setVoteSuccess(true);
-            }
-          }
+    let cancelled = false;
+    const fetchCount = async () => {
+      try {
+        const token = await getFirebaseAuth().currentUser?.getIdToken();
+        if (!token || cancelled) return;
+        const res = await fetch(`/api/user?action=count`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setTotalCount(data.totalParticipants ?? 0);
         }
-      },
-    );
-    return () => unsub();
-  }, [user, eventStatus]);
+      } catch { /* silent */ }
+    };
+    fetchCount();
+    // Poll every 30s for updated count
+    const interval = setInterval(fetchCount, 30_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [user]);
 
   // Fetch current user's bio from Firestore
   useEffect(() => {
@@ -237,30 +230,29 @@ export default function VotePage() {
     });
   }, [teams]);
 
-  // Fetch member profiles when inspectTeam changes
+  // Fetch member profiles when inspectTeam changes - via API to avoid PII exposure
   useEffect(() => {
     if (!inspectTeam || inspectTeam.memberUserIds.length === 0) {
       setInspectMembers([]);
       return;
     }
-
-    const memberIds = inspectTeam.memberUserIds;
-    const usersCol = collection(getFirebaseDb(), "events", EVENT_ID, "users");
-
-    // Firestore 'in' query supports up to 30 items
-    const q = query(
-      usersCol,
-      where(documentId(), "in", memberIds.slice(0, 30)),
-    );
-    getDocs(q).then((snap) => {
-      const members: MemberProfile[] = snap.docs.map((d) => ({
-        uniqueCode: d.id,
-        name: d.data().name ?? d.id,
-        bio: d.data().bio ?? null,
-        techTags: d.data().techTags ?? [],
-      }));
-      setInspectMembers(members);
-    });
+    let cancelled = false;
+    const fetchMembers = async () => {
+      try {
+        const token = await getFirebaseAuth().currentUser?.getIdToken();
+        if (!token || cancelled) return;
+        const ids = inspectTeam.memberUserIds.slice(0, 30).join(",");
+        const res = await fetch(`/api/user?action=members&ids=${ids}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setInspectMembers(data.members ?? []);
+        }
+      } catch { /* silent */ }
+    };
+    fetchMembers();
+    return () => { cancelled = true; };
   }, [inspectTeam]);
 
   const handleInspect = useCallback(

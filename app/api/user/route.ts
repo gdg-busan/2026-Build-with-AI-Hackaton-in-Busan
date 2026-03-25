@@ -4,6 +4,56 @@ import { EVENT_ID } from "@/shared/config/constants";
 import type { UserRole } from "@/shared/types";
 import { checkProfileComplete } from "@/features/mission/api/mission-tracker";
 
+export async function GET(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "인증 토큰이 필요합니다" }, { status: 401 });
+    }
+
+    try {
+      await adminAuth.verifyIdToken(authHeader.slice(7));
+    } catch {
+      return NextResponse.json({ error: "유효하지 않은 인증 토큰입니다" }, { status: 401 });
+    }
+
+    const action = req.nextUrl.searchParams.get("action");
+
+    if (action === "count") {
+      const usersSnap = await adminDb
+        .collection("events").doc(EVENT_ID).collection("users")
+        .where("role", "==", "participant")
+        .count()
+        .get();
+      return NextResponse.json({ totalParticipants: usersSnap.data().count });
+    }
+
+    if (action === "members") {
+      const idsParam = req.nextUrl.searchParams.get("ids");
+      if (!idsParam) {
+        return NextResponse.json({ error: "ids 파라미터가 필요합니다" }, { status: 400 });
+      }
+      const ids = idsParam.split(",").slice(0, 30);
+      const usersRef = adminDb.collection("events").doc(EVENT_ID).collection("users");
+      const snaps = await Promise.all(ids.map((id) => usersRef.doc(id).get()));
+      const members = snaps
+        .filter((s) => s.exists)
+        .map((s) => ({
+          uniqueCode: s.id,
+          name: s.data()?.name ?? s.id,
+          bio: s.data()?.bio ?? null,
+          techTags: s.data()?.techTags ?? [],
+        }));
+      return NextResponse.json({ members });
+    }
+
+    return NextResponse.json({ error: "action 파라미터가 필요합니다 (count | members)" }, { status: 400 });
+  } catch (err) {
+    console.error("User GET API error:", err);
+    return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 });
+  }
+}
+
 export async function PUT(req: NextRequest) {
   try {
     const authHeader = req.headers.get("Authorization");
