@@ -2,10 +2,12 @@
   "name": "GDG Busan - Build with AI Vote",
   "short_name": "GDG Vote",
   "description": "GDG Busan 해커톤 투표 플랫폼",
-  "start_url": "/",
+  "start_url": "/vote",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#0A0E1A",
   "theme_color": "#0A0E1A",
+  "categories": ["social", "utilities"],
   "icons": [
     {
       "src": "/favicon.ico",

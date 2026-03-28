@@ -45,14 +45,17 @@ export function VoteConfirmDialog({
           </span>
         </div>
 
-        <div className="space-y-2 my-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 my-4">
           {selectedTeams.map((team) => (
             <div
               key={team.id}
-              className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-border"
+              className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-secondary/50 border border-primary/20 text-center"
             >
-              <span className="text-2xl">{team.emoji}</span>
-              <span className="font-mono font-medium">{team.name}</span>
+              <span className="text-3xl">{team.emoji}</span>
+              <span className="font-mono font-medium text-sm leading-tight">{team.name}</span>
+              {team.nickname && (
+                <span className="font-mono text-[10px] text-muted-foreground leading-tight">({team.nickname})</span>
+              )}
             </div>
           ))}
         </div>

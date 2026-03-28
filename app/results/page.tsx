@@ -13,6 +13,9 @@ import type { EventConfig, Team, TeamScore } from "@/shared/types";
 import { ChatPanel } from "@/features/chat/ui/ChatPanel";
 import { AnnouncementManager } from "@/features/announcement/ui/AnnouncementManager";
 import { MissionPanel } from "@/features/mission/ui/MissionPanel";
+import { NetworkStatusBanner } from "@/shared/ui/NetworkStatusBanner";
+import { MyTeamBadge } from "@/shared/ui/MyTeamBadge";
+import { useStatusNotification } from "@/shared/hooks/useStatusNotification";
 import { gaResultsView, gaRevealComplete } from "@/shared/lib/gtag";
 
 function getRankLabel(rank: number) {
@@ -50,6 +53,9 @@ export default function ResultsPage() {
   const [showReveal, setShowReveal] = useState(false);
   const [revealComplete, setRevealComplete] = useState(false);
   const [configLoading, setConfigLoading] = useState(true);
+
+  // Status change notifications
+  useStatusNotification(eventConfig?.status);
 
   // Auth guard
   useEffect(() => {
@@ -162,6 +168,9 @@ export default function ResultsPage() {
   if (!eventConfig || (eventConfig.status !== "revealed_p1" && eventConfig.status !== "revealed_final")) {
     return (
       <div className="min-h-screen bg-[#0A0E1A] dot-grid flex flex-col items-center justify-center gap-8">
+        <div className="fixed top-0 left-0 right-0 z-50">
+          <NetworkStatusBanner />
+        </div>
         <motion.div
           className="text-[#4DAFFF] font-mono font-black glow-blue text-center"
           style={{ fontSize: "2.5rem" }}
@@ -216,6 +225,8 @@ export default function ResultsPage() {
 
   // Static view after reveal animation
 
+  const userTeamId = user?.teamId;
+
   // Phase 1: show selected teams grid (no scores, no rankings)
   if (revealPhase === "p1" && revealComplete) {
     return (
@@ -245,21 +256,29 @@ export default function ResultsPage() {
           </motion.div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {p1Teams.map((team, i) => (
-              <motion.div
-                key={team.id}
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: i * 0.08, type: "spring", stiffness: 200 }}
-                className="bg-[#1A2235] rounded-xl p-4 border border-[#4DAFFF]/20 flex flex-col items-center gap-2 text-center card-glow"
-              >
-                <span className="text-4xl">{team.emoji}</span>
-                <span className="text-white font-bold text-sm">{team.name}</span>
-                {team.nickname && (
-                  <span className="text-[#7B8BA3] text-xs">({team.nickname})</span>
-                )}
-              </motion.div>
-            ))}
+            {p1Teams.map((team, i) => {
+              const isMyTeam = userTeamId === team.id;
+              return (
+                <motion.div
+                  key={team.id}
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: i * 0.08, type: "spring", stiffness: 200 }}
+                  className={`relative bg-[#1A2235] rounded-xl p-4 flex flex-col items-center gap-2 text-center card-glow ${
+                    isMyTeam
+                      ? "border-2 border-[#FFD700] shadow-[0_0_20px_rgba(255,215,0,0.3)]"
+                      : "border border-[#4DAFFF]/20"
+                  }`}
+                >
+                  {isMyTeam && <MyTeamBadge />}
+                  <span className="text-4xl">{team.emoji}</span>
+                  <span className="text-white font-bold text-sm">{team.name}</span>
+                  {team.nickname && (
+                    <span className="text-[#7B8BA3] text-xs">({team.nickname})</span>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
 
           <motion.div
@@ -326,14 +345,18 @@ export default function ResultsPage() {
             const actualRank = podiumOrder[idx];
             const heights = ["h-28", "h-36", "h-20"];
             const rankClass = getRankClass(actualRank);
+            const isMyTeam = userTeamId === team.teamId;
             return (
               <motion.div
                 key={team.teamId}
                 initial={{ y: 40, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.3 + idx * 0.15 }}
-                className="flex flex-col items-center gap-2"
+                className={`relative flex flex-col items-center gap-2 ${
+                  isMyTeam ? "drop-shadow-[0_0_12px_rgba(255,215,0,0.5)]" : ""
+                }`}
               >
+                {isMyTeam && <MyTeamBadge />}
                 <div className="text-4xl">{team.emoji}</div>
                 <p className={`font-bold text-center text-sm ${rankClass}`}>{team.teamName}{team.teamNickname && <span className="text-[#7B8BA3] text-xs block">({team.teamNickname})</span>}</p>
                 <p className={`font-mono text-sm ${rankClass}`}>{team.finalScore.toFixed(1)}</p>
@@ -354,14 +377,20 @@ export default function ResultsPage() {
           {top3Scores.map((team, i) => {
             const pct = (team.finalScore / maxScore) * 100;
             const rankClass = getRankClass(team.rank);
+            const isMyTeam = userTeamId === team.teamId;
             return (
               <motion.div
                 key={team.teamId}
                 initial={{ x: -60, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.4 + i * 0.07, type: "spring", stiffness: 200 }}
-                className="bg-[#1A2235] rounded-xl px-5 py-4 border border-[rgba(77,175,255,0.15)] card-glow"
+                className={`relative bg-[#1A2235] rounded-xl px-5 py-4 card-glow ${
+                  isMyTeam
+                    ? "border-2 border-[#FFD700] shadow-[0_0_16px_rgba(255,215,0,0.25)]"
+                    : "border border-[rgba(77,175,255,0.15)]"
+                }`}
               >
+                {isMyTeam && <MyTeamBadge position="right" />}
                 <div className="flex items-center gap-3 mb-2">
                   <span className={`font-mono font-bold w-10 text-right ${rankClass}`} style={{ fontSize: "1.4rem" }}>
                     {getRankLabel(team.rank)}

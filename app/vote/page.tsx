@@ -17,6 +17,10 @@ import { useVotingTimer } from "@/features/voting/model/useVotingTimer";
 import { useAuth } from "@/features/auth/model/auth-context";
 import { EVENT_ID } from "@/shared/config/constants";
 import { getFirebaseAuth, getFirebaseDb } from "@/shared/api/firebase";
+import { useStatusNotification } from "@/shared/hooks/useStatusNotification";
+import { useOnlineCount } from "@/shared/hooks/useOnlineCount";
+import { NetworkStatusBanner } from "@/shared/ui/NetworkStatusBanner";
+import { OnlineCounter } from "@/shared/ui/OnlineCounter";
 import type { EventConfig, MemberProfile, Team } from "@/shared/types";
 import { gaTeamSelect, gaTeamInspect, gaVoteConfirmOpen, gaVoteSubmit, gaVoteFailed, gaLogout } from "@/shared/lib/gtag";
 import { cn } from "@/shared/lib/utils";
@@ -61,6 +65,10 @@ export default function VotePage() {
   const [selectedTechFilter, setSelectedTechFilter] = useState<string | null>(null);
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
   const { isBookmarked, toggleBookmark, count: bookmarkCount } = useBookmarks();
+  const onlineCount = useOnlineCount(user?.uniqueCode);
+
+  // Status change notifications (sound + browser notification + tab flash)
+  useStatusNotification(eventConfig?.status);
 
   // Show toast when timer is extended
   useEffect(() => {
@@ -548,6 +556,9 @@ export default function VotePage() {
         )}
       </AnimatePresence>
 
+      {/* Network status banner */}
+      <NetworkStatusBanner />
+
       {/* Top bar */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap sm:flex-nowrap items-center justify-between gap-y-2 gap-x-1 overflow-hidden">
@@ -630,6 +641,10 @@ export default function VotePage() {
           </div>
         </div>
         <AnnouncementManager />
+        {/* Online users counter */}
+        <div className="max-w-5xl mx-auto px-4 py-1.5 border-t border-border/50">
+          <OnlineCounter count={onlineCount} />
+        </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
