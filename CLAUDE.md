@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GDG Busan "Build with AI" 해커톤 투표 플랫폼. 25팀(2인 1팀, 50명) 중 심사위원+참가자 가중 투표로 TOP 10을 선정하는 실시간 투표 시스템.
+GDG Busan "Build with AI" 해커톤 투표 플랫폼. 팀 수/인원 제한 없이 심사위원+참가자 가중 투표로 TOP 10을 선정하는 실시간 투표 시스템.
 
 ## Commands
 

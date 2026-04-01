@@ -93,7 +93,7 @@ export default function Image() {
             display: "flex",
           }}
         >
-          25팀의 AI 프로젝트 중 최고를 투표하세요!
+          AI 프로젝트 중 최고를 투표하세요!
         </div>
 
         {/* Bottom accent */}

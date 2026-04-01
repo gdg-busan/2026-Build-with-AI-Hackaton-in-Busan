@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "GDG Busan - Build with AI 2026",
-    description: "25팀의 AI 프로젝트 중 최고를 투표하세요! 🗳️",
+    description: "AI 프로젝트 중 최고를 투표하세요! 🗳️",
     url: siteUrl,
     siteName: "GDG Busan Hackathon Vote",
     locale: "ko_KR",
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "GDG Busan - Build with AI 2026",
-    description: "25팀의 AI 프로젝트 중 최고를 투표하세요!",
+    description: "AI 프로젝트 중 최고를 투표하세요!",
   },
 };
 
