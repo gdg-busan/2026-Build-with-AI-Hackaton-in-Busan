@@ -45,7 +45,7 @@ const STEP_LABELS = ["설정", "미리보기", "결과"];
 export default function BatchSetupWizard({ onComplete, callAdminApi }: BatchSetupWizardProps) {
   const [step, setStep] = useState(0);
   const [config, setConfig] = useState<ConfigState>({
-    teamCount: 25,
+    teamCount: 10,
     participantsPerTeam: 2,
     judgeCount: 5,
     teamPrefix: "팀",
