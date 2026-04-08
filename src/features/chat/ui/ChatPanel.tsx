@@ -84,7 +84,7 @@ export function ChatPanel() {
   );
 
   const handleSend = useCallback(
-    async (text: string) => {
+    async (text: string, image?: File | null) => {
       if (!user || !currentRoomId) return;
       try {
         await sendChatMessage(currentRoomId, text, {
@@ -92,7 +92,7 @@ export function ChatPanel() {
           name: user.name,
           role: user.role,
           teamId: user.teamId,
-        });
+        }, image);
 
         // Mark as read after sending
         markAsRead(user.uniqueCode, currentRoomId);

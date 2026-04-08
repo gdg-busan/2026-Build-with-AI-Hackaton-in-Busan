@@ -39,6 +39,7 @@ const docToMessage = (d: QueryDocumentSnapshot): ChatMessage => {
   return {
     id: d.id,
     text: data.text ?? "",
+    imageUrl: data.imageUrl ?? null,
     senderId: data.senderId ?? "",
     senderName: data.senderName ?? "",
     senderRole: data.senderRole ?? "participant",

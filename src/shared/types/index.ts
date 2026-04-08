@@ -87,7 +87,7 @@ export interface TeamScore {
 
 // Chat types
 export type ChatRoomType = "global" | "team";
-export type ChatMessageType = "text" | "system";
+export type ChatMessageType = "text" | "image" | "system";
 
 export interface ChatRoom {
   id: string;
@@ -103,6 +103,7 @@ export interface ChatRoom {
 export interface ChatMessage {
   id: string;
   text: string;
+  imageUrl?: string | null;
   senderId: string;
   senderName: string;
   senderRole: UserRole;
