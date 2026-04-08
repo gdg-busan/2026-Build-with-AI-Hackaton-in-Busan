@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import Image from "next/image";
 import { Badge } from "@/shared/ui/badge";
 import type { ChatMessage as ChatMessageType } from "@/shared/types";
 
@@ -17,6 +19,43 @@ function formatTime(date: Date): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}시간 전`;
   return date.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+}
+
+function ChatImage({ src }: { src: string }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <>
+      <button
+        onClick={() => setExpanded(true)}
+        className="block rounded-md overflow-hidden border border-border/30 hover:border-primary/40 transition-colors cursor-zoom-in"
+      >
+        <Image
+          src={src}
+          alt="채팅 이미지"
+          width={200}
+          height={200}
+          className="max-w-[200px] max-h-[200px] object-contain"
+          unoptimized
+        />
+      </button>
+      {expanded && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-zoom-out"
+          onClick={() => setExpanded(false)}
+        >
+          <Image
+            src={src}
+            alt="채팅 이미지"
+            width={800}
+            height={800}
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+            unoptimized
+          />
+        </div>
+      )}
+    </>
+  );
 }
 
 export function ChatMessageItem({ message, isOwn }: ChatMessageProps) {
@@ -79,7 +118,12 @@ export function ChatMessageItem({ message, isOwn }: ChatMessageProps) {
               : "bg-white/[0.04] border border-border/30 text-foreground/90"
           }`}
         >
-          {message.text}
+          {message.imageUrl && <ChatImage src={message.imageUrl} />}
+          {message.text && (
+            <span className={message.imageUrl ? "block mt-1.5" : ""}>
+              {message.text}
+            </span>
+          )}
         </div>
         {/* Timestamp */}
         <div className={`px-1 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isOwn ? "text-right" : "text-left"}`}>

@@ -58,7 +58,12 @@ service cloud.firestore {
               request.auth.token.role == 'admin'
             )
             && request.resource.data.text is string
-            && request.resource.data.text.size() >= 1
+            && (
+              request.resource.data.text.size() >= 1 ||
+              (request.resource.data.keys().hasAny(['imageUrl'])
+                && request.resource.data.imageUrl is string
+                && request.resource.data.imageUrl.matches('^https://firebasestorage\\.googleapis\\.com/.+'))
+            )
             && request.resource.data.text.size() <= 500
             && request.resource.data.senderId == request.auth.uid
             && request.resource.data.deleted == false;

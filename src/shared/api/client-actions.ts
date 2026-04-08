@@ -9,6 +9,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/shared/api/firebase";
+import { getFirebaseAuth } from "@/shared/api/firebase";
 import { EVENT_ID } from "@/shared/config/constants";
 import { MISSIONS } from "@/features/mission/model/missions";
 import type { MissionId, UserRole } from "@/shared/types";
@@ -47,6 +48,25 @@ export async function sendCheer(
 
 // ─── Chat Message (Direct Firebase) ─────────────────────────────
 
+async function uploadChatImage(roomId: string, image: File): Promise<string> {
+  const token = await getFirebaseAuth().currentUser?.getIdToken();
+  if (!token) throw new Error("인증이 필요합니다");
+
+  const formData = new FormData();
+  formData.append("image", image);
+  formData.append("roomId", roomId);
+
+  const res = await fetch("/api/chat/upload", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "이미지 업로드에 실패했습니다");
+  return data.imageUrl;
+}
+
 export async function sendChatMessage(
   roomId: string,
   text: string,
@@ -56,34 +76,44 @@ export async function sendChatMessage(
     role: UserRole;
     teamId: string | null;
     teamName?: string | null;
-  }
+  },
+  image?: File | null
 ): Promise<string> {
   const trimmedText = text.trim();
-  if (trimmedText.length === 0) throw new Error("메시지를 입력해주세요");
+  const hasImage = image != null;
+
+  if (!hasImage && trimmedText.length === 0) throw new Error("메시지를 입력해주세요");
   if (trimmedText.length > 500) throw new Error("메시지는 500자 이내로 입력해주세요");
 
-  const db = getFirebaseDb();
-  const messagesRef = collection(
-    db,
-    `events/${EVENT_ID}/chatRooms/${roomId}/messages`
-  );
+  // Upload image via API if present
+  let imageUrl: string | null = null;
+  if (hasImage) {
+    imageUrl = await uploadChatImage(roomId, image);
+  }
 
-  const docRef = await addDoc(messagesRef, {
-    text: trimmedText,
-    senderId: user.uid,
-    senderName: user.name,
-    senderRole: user.role,
-    senderTeamId: user.teamId,
-    senderTeamName: user.teamName ?? null,
-    createdAt: serverTimestamp(),
-    deleted: false,
-    type: "text",
+  const token = await getFirebaseAuth().currentUser?.getIdToken();
+  if (!token) throw new Error("인증이 필요합니다");
+
+  const res = await fetch("/api/chat/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      roomId,
+      text: trimmedText,
+      ...(imageUrl ? { imageUrl } : {}),
+    }),
   });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "메시지 전송에 실패했습니다");
 
   // Mission tracking (fire and forget)
   trackMissionClient(user.uid, "chat_10_messages").catch(() => {});
 
-  return docRef.id;
+  return data.messageId;
 }
 
 // ─── Feedback (Direct Firebase) ──────────────────────────────────

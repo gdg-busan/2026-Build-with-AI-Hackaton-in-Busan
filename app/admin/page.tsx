@@ -267,6 +267,7 @@ export default function AdminPage() {
             roomId: selectedChatRoom,
             roomName,
             text: data.text,
+            imageUrl: data.imageUrl ?? null,
             senderId: data.senderId,
             senderName: data.senderName,
             senderRole: data.senderRole,
@@ -2301,9 +2302,20 @@ export default function AdminPage() {
                           <span className="text-red-400 font-mono text-xs">[삭제됨]</span>
                         )}
                       </div>
-                      <p className="text-gray-300 font-mono text-sm break-words">
-                        {msg.text}
-                      </p>
+                      {msg.imageUrl && (
+                        <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
+                          <img
+                            src={msg.imageUrl}
+                            alt="채팅 이미지"
+                            className="max-w-[200px] max-h-[200px] object-contain rounded border border-[#1A2235] hover:border-[#00FF88]/40 transition-colors"
+                          />
+                        </a>
+                      )}
+                      {msg.text && (
+                        <p className="text-gray-300 font-mono text-sm break-words">
+                          {msg.text}
+                        </p>
+                      )}
                     </div>
                     {!msg.deleted && (
                       <button
