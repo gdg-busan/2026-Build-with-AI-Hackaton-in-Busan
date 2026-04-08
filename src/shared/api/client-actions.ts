@@ -91,31 +91,29 @@ export async function sendChatMessage(
     imageUrl = await uploadChatImage(roomId, image);
   }
 
-  const db = getFirebaseDb();
-  const messagesRef = collection(
-    db,
-    `events/${EVENT_ID}/chatRooms/${roomId}/messages`
-  );
+  const token = await getFirebaseAuth().currentUser?.getIdToken();
+  if (!token) throw new Error("인증이 필요합니다");
 
-  const messageType = hasImage ? "image" : "text";
-
-  const docRef = await addDoc(messagesRef, {
-    text: trimmedText,
-    ...(imageUrl ? { imageUrl } : {}),
-    senderId: user.uid,
-    senderName: user.name,
-    senderRole: user.role,
-    senderTeamId: user.teamId,
-    senderTeamName: user.teamName ?? null,
-    createdAt: serverTimestamp(),
-    deleted: false,
-    type: messageType,
+  const res = await fetch("/api/chat/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      roomId,
+      text: trimmedText,
+      ...(imageUrl ? { imageUrl } : {}),
+    }),
   });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "메시지 전송에 실패했습니다");
 
   // Mission tracking (fire and forget)
   trackMissionClient(user.uid, "chat_10_messages").catch(() => {});
 
-  return docRef.id;
+  return data.messageId;
 }
 
 // ─── Feedback (Direct Firebase) ──────────────────────────────────

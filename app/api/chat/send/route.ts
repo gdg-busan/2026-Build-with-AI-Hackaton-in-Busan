@@ -43,10 +43,11 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body = await req.json();
-    const { roomId, text }: { roomId: string; text: string } = body;
+    const { roomId, text, imageUrl }: { roomId: string; text: string; imageUrl?: string } = body;
+    const hasImage = typeof imageUrl === "string" && imageUrl.length > 0;
 
-    // Validate text
-    if (typeof text !== "string" || text.trim().length === 0) {
+    // Validate text (allow empty text if image is present)
+    if (typeof text !== "string" || (!hasImage && text.trim().length === 0)) {
       return NextResponse.json(
         { error: "메시지를 입력해주세요" },
         { status: 400 }
@@ -126,6 +127,7 @@ export async function POST(req: NextRequest) {
     const messageRef = messagesRef.doc();
     batch.set(messageRef, {
       text: trimmedText,
+      ...(hasImage ? { imageUrl } : {}),
       senderId: uid,
       senderName: name,
       senderRole: role,
@@ -133,13 +135,14 @@ export async function POST(req: NextRequest) {
       senderTeamName,
       createdAt: FieldValue.serverTimestamp(),
       deleted: false,
-      type: "text",
+      type: hasImage ? "image" : "text",
     });
 
     // Update chatRoom metadata
+    const preview = hasImage && !trimmedText ? "[이미지]" : trimmedText.slice(0, 50);
     batch.update(roomRef, {
       lastMessageAt: FieldValue.serverTimestamp(),
-      lastMessagePreview: trimmedText.slice(0, 50),
+      lastMessagePreview: preview,
       lastMessageSender: name,
       messageCount: FieldValue.increment(1),
     });
