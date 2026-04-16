@@ -38,6 +38,9 @@ yarn-error.log*
 .env*
 !.env.local.example
 
+# seed overrides (개인정보 포함)
+team-overrides*.json
+
 # vercel
 .vercel
 
