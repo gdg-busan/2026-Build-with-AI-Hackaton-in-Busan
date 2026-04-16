@@ -176,18 +176,21 @@ function extractTeamName(teamInfo: string, attendeeName: string, email: string):
  * "장시영 - two_sense" → "two_sense"
  * "이도현 어바웃타임" → "어바웃타임"
  */
-function stripAttendeeNamePrefix(teamName: string, allNames: ReadonlySet<string>): string {
+function stripAttendeeNamePrefix(teamName: string, allNames: ReadonlySet<string>, email: string): string {
   // "이름 - 팀명" 패턴 (e.g., "장시영 - two_sense")
   const dashMatch = teamName.match(/^(.+?)\s*[-–—]\s*(.+)$/);
   if (dashMatch && allNames.has(dashMatch[1].trim())) {
-    return dashMatch[2].trim();
+    const candidate = dashMatch[2].trim();
+    if (!isInvalidTeamName(candidate, dashMatch[1].trim())) return candidate;
+    return generateDeterministicTeamName(email);
   }
 
   // "이름 팀명" 패턴 (e.g., "이도현 어바웃타임")
   for (const name of allNames) {
     if (teamName.startsWith(name + " ") && teamName.length > name.length + 1) {
       const remainder = teamName.substring(name.length + 1).trim();
-      if (remainder) return remainder;
+      if (remainder && !isInvalidTeamName(remainder, name)) return remainder;
+      if (remainder) return generateDeterministicTeamName(email);
     }
   }
 
@@ -334,7 +337,7 @@ async function seed() {
   const teamGroups = new Map<string, { displayName: string; members: Attendee[] }>();
   for (const attendee of activeAttendees) {
     const rawName = extractTeamName(attendee.teamInfo, attendee.name, attendee.email);
-    const stripped = stripAttendeeNamePrefix(rawName, allAttendeeNames);
+    const stripped = stripAttendeeNamePrefix(rawName, allAttendeeNames, attendee.email);
     const key = teamGroupKey(stripped);
 
     const existing = teamGroups.get(key);
@@ -369,7 +372,7 @@ async function seed() {
   const existingTeams = await teamsRef.get();
   const existingTeamNames = new Map<string, string>();
   existingTeams.forEach((doc) => {
-    existingTeamNames.set(doc.data().name, doc.id);
+    existingTeamNames.set(teamGroupKey(doc.data().name), doc.id);
   });
 
   let nextUserIndex = existingUsers.size + 1;
@@ -403,7 +406,7 @@ async function seed() {
 
   for (const [, { displayName: teamName, members }] of teamGroups) {
     // 팀 생성 또는 기존 팀 찾기
-    let teamId = existingTeamNames.get(teamName);
+    let teamId = existingTeamNames.get(teamGroupKey(teamName));
     if (!teamId) {
       teamId = `team-${String(nextTeamIndex).padStart(2, "0")}`;
       nextTeamIndex++;
