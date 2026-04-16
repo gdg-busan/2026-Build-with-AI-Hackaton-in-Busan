@@ -2,11 +2,14 @@
  * 예매자 엑셀 파일에서 참가자를 시드하는 스크립트
  *
  * 사용법:
- *   npx tsx scripts/seed-attendees.ts <엑셀파일경로>
+ *   npx tsx scripts/seed-attendees.ts <엑셀파일경로> [오버라이드.json]
  *
  * 엑셀에서 예매 상태인 참가자만 추출하여 Firestore에 유저+팀을 생성하고,
  * 이메일 → 참가코드 매핑을 저장합니다.
  * 같은 팀으로 지원한 참가자는 같은 팀으로 배정됩니다.
+ *
+ * 오버라이드 JSON (선택): 엑셀에 팀 정보가 누락된 참가자의 팀을 수동 지정
+ *   예시: { "email@example.com": "팀명" }
  */
 
 import { initializeApp, cert, type ServiceAccount } from "firebase-admin/app";
@@ -128,6 +131,7 @@ function validNameOrDeterministic(candidate: string, attendeeName: string, email
 /**
  * 팀 정보 문자열에서 팀명을 추출
  * 패턴:
+ *   "팀명: KAWL, 팀원: 이여희, 이세희"              → KAWL
  *   "대표팀원: 손수호, 팀명: 이겨야한다딸깍딸깍"  → 이겨야한다딸깍딸깍
  *   "대표팀원 이름: 송녕경, 팀명: 나에겐"          → 나에겐
  *   "송녕경, 나에겐"                               → 나에겐
@@ -139,9 +143,17 @@ function validNameOrDeterministic(candidate: string, attendeeName: string, email
 function extractTeamName(teamInfo: string, attendeeName: string, email: string): string {
   if (isInvalidTeamName(teamInfo, attendeeName)) return generateDeterministicTeamName(email);
 
-  // "팀명: XXX" 패턴
+  // "팀명: XXX" 또는 "팀명: XXX, 팀원: ..." 패턴
   const teamNameMatch = teamInfo.match(/팀명\s*[:：]\s*(.+)/);
-  if (teamNameMatch) return validNameOrDeterministic(teamNameMatch[1].trim(), attendeeName, email);
+  if (teamNameMatch) {
+    let name = teamNameMatch[1].trim();
+    // "KAWL, 팀원: 이여희, 이세희" → "KAWL" (팀원 정보 제거)
+    const memberIdx = name.search(/[,，]\s*팀원/);
+    if (memberIdx >= 0) {
+      name = name.substring(0, memberIdx).trim();
+    }
+    return validNameOrDeterministic(name, attendeeName, email);
+  }
 
   // "이름 / 팀명" 패턴
   if (teamInfo.includes("/")) {
@@ -157,6 +169,34 @@ function extractTeamName(teamInfo: string, attendeeName: string, email: string):
 
   // 단일 문자열
   return validNameOrDeterministic(teamInfo.trim(), attendeeName, email);
+}
+
+/**
+ * 팀명에서 참가자 이름 접두사를 제거
+ * "장시영 - two_sense" → "two_sense"
+ * "이도현 어바웃타임" → "어바웃타임"
+ */
+function stripAttendeeNamePrefix(teamName: string, allNames: ReadonlySet<string>): string {
+  // "이름 - 팀명" 패턴 (e.g., "장시영 - two_sense")
+  const dashMatch = teamName.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+  if (dashMatch && allNames.has(dashMatch[1].trim())) {
+    return dashMatch[2].trim();
+  }
+
+  // "이름 팀명" 패턴 (e.g., "이도현 어바웃타임")
+  for (const name of allNames) {
+    if (teamName.startsWith(name + " ") && teamName.length > name.length + 1) {
+      const remainder = teamName.substring(name.length + 1).trim();
+      if (remainder) return remainder;
+    }
+  }
+
+  return teamName;
+}
+
+/** 팀명 정규화 키: 소문자, _→-, 공백 trim */
+function teamGroupKey(name: string): string {
+  return name.toLowerCase().replace(/_/g, "-").trim();
 }
 
 function parseCSVLine(line: string): string[] {
@@ -261,20 +301,54 @@ async function seed() {
 
   console.log(`📊 전체 ${attendees.length}명 중 유효 참가자: ${activeAttendees.length}명\n`);
 
-  // ─── 1. 팀 그룹핑 ───
-  // 팀명 → 참가자 목록
-  const teamGroups = new Map<string, Attendee[]>();
+  // ─── 0. 수동 팀 배정 오버라이드 (엑셀에 팀 정보가 누락된 참가자) ───
+  // 사용법: npx tsx scripts/seed-attendees.ts <엑셀> [overrides.json]
+  // overrides.json 예시: { "email@example.com": "팀명" }
+  const overridesPath = process.argv[3];
+  if (overridesPath) {
+    const resolvedOverrides = resolve(overridesPath);
+    if (existsSync(resolvedOverrides)) {
+      const overrides: Record<string, string> = JSON.parse(
+        require("fs").readFileSync(resolvedOverrides, "utf-8"),
+      );
+      let overrideCount = 0;
+      for (const attendee of activeAttendees) {
+        const override = overrides[attendee.email];
+        if (override) {
+          attendee.teamInfo = override;
+          overrideCount++;
+          console.log(`🔧 오버라이드: ${attendee.name} (${attendee.email}) → ${override}`);
+        }
+      }
+      console.log(`🔧 팀 오버라이드 ${overrideCount}건 적용\n`);
+    } else {
+      console.error(`⚠️  오버라이드 파일을 찾을 수 없습니다: ${resolvedOverrides}`);
+    }
+  }
+
+  // ─── 1. 팀 그룹핑 (정규화 포함) ───
+  // 모든 참가자 이름 수집 (이름 접두사 제거용)
+  const allAttendeeNames = new Set(activeAttendees.map((a) => a.name));
+
+  // 정규화 키 → { displayName, members }
+  const teamGroups = new Map<string, { displayName: string; members: Attendee[] }>();
   for (const attendee of activeAttendees) {
-    const teamName = extractTeamName(attendee.teamInfo, attendee.name, attendee.email);
-    const existing = teamGroups.get(teamName) || [];
-    existing.push(attendee);
-    teamGroups.set(teamName, existing);
+    const rawName = extractTeamName(attendee.teamInfo, attendee.name, attendee.email);
+    const stripped = stripAttendeeNamePrefix(rawName, allAttendeeNames);
+    const key = teamGroupKey(stripped);
+
+    const existing = teamGroups.get(key);
+    if (existing) {
+      existing.members.push(attendee);
+    } else {
+      teamGroups.set(key, { displayName: stripped, members: [attendee] });
+    }
   }
 
   console.log(`🏠 팀 ${teamGroups.size}개 감지:\n`);
-  for (const [teamName, members] of teamGroups) {
+  for (const [, { displayName, members }] of teamGroups) {
     const memberNames = members.map((m) => m.name).join(", ");
-    console.log(`  📌 ${teamName} (${members.length}명): ${memberNames}`);
+    console.log(`  📌 ${displayName} (${members.length}명): ${memberNames}`);
   }
   console.log("");
 
@@ -327,7 +401,7 @@ async function seed() {
     }
   };
 
-  for (const [teamName, members] of teamGroups) {
+  for (const [, { displayName: teamName, members }] of teamGroups) {
     // 팀 생성 또는 기존 팀 찾기
     let teamId = existingTeamNames.get(teamName);
     if (!teamId) {
