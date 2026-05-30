@@ -17,7 +17,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import * as dotenv from "dotenv";
 import { resolve } from "path";
 import { execSync } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 
 dotenv.config({ path: resolve(__dirname, "../.env.local") });
 
@@ -312,7 +312,7 @@ async function seed() {
     const resolvedOverrides = resolve(overridesPath);
     if (existsSync(resolvedOverrides)) {
       const overrides: Record<string, string> = JSON.parse(
-        require("fs").readFileSync(resolvedOverrides, "utf-8"),
+        readFileSync(resolvedOverrides, "utf-8"),
       );
       let overrideCount = 0;
       for (const attendee of activeAttendees) {
